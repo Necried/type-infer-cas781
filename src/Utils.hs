@@ -2,6 +2,8 @@ module Utils where
 
 import Data.List (find)
 import Data.List.Extra
+import Data.Function ((&))
+
 
 lookupVar :: Foldable t => (a -> Bool) -> t a -> s -> Either s a
 lookupVar f xs errMsg =
@@ -34,3 +36,8 @@ infixl 5 <:
 (<:) :: [a] -> a -> [a]
 (<:) = snoc
 
+infixl 1 |>
+(|>) = (&)
+
+infixr 0 <|
+(<|) = ($)

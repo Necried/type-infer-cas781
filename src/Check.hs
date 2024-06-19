@@ -7,6 +7,7 @@ import Control.Monad (unless, when)
 
 import qualified Data.Set as Set
 import Data.Set (Set)
+import Data.List (find)
 
 import Types
 import Utils
@@ -18,16 +19,36 @@ freeVars (TyVarHat varName)   = Set.singleton (TyVarHat varName)
 freeVars (TyArrow tyA tyB)    = Set.union (freeVars tyA) (freeVars tyB)
 freeVars (Forall varName ty)  = Set.delete (TyVar varName) $ freeVars ty
 
-
+isMonotype :: Ty -> Bool
+isMonotype (Forall _ _) = False
+isMonotype (TyArrow tyA tyB) = isMonotype tyA && isMonotype tyB
+isMonotype _ = True
 
 -- NOTE: We follow the first notation
 -- 1. [alpha := alphaHat]
 -- 2. in the paper, it's [alphaHat / alpha]
 tySubst :: Ty -> Ty -> Ty -> Ty
-tySubst alpha alphaHat tyA = undefined
+tySubst alpha alphaHat UnitTy = UnitTy
+tySubst alpha alphaHat (TyVar alphaName) = 
+  if TyVar alphaName == alpha then alphaHat else TyVar alphaName
+tySubst alpha alphaHat (TyVarHat alphaName) = TyVarHat alphaName
+tySubst alpha alphaHat (TyArrow tyA tyB) = TyArrow (tySubst alpha alphaHat tyA) (tySubst alpha alphaHat tyB) 
+tySubst alpha alphaHat (Forall alphaName tyA) = Forall alphaName (tySubst alpha alphaHat tyA)
+
 
 ctxSubst :: Ctx -> Ty -> Ty
-ctxSubst ctx ty = undefined
+ctxSubst ctx (TyVar alphaName) = TyVar alphaName
+ctxSubst ctx UnitTy = UnitTy
+ctxSubst ctx (TyVarHat alphaName) 
+  | any hasEq ctx =
+    ctxSubst ctx tau
+  where
+    hasEq (CtxEquality alphaName' _) = alphaName == alphaName'
+    hasEq _ = False
+    (Just (CtxEquality _ tau)) = find hasEq ctx
+ctxSubst ctx (TyVarHat alphaName) = TyVarHat alphaName
+ctxSubst ctx (TyArrow tyA tyB) = TyArrow (ctxSubst ctx tyA) (ctxSubst ctx tyB)
+ctxSubst ctx (Forall alphaName tyA) = Forall alphaName (ctxSubst ctx tyA)
 
 subTypeOf :: Ctx -> Ty -> Ty -> TyStateT Ctx
 subTypeOf ctx (TyVar alpha0) (TyVar alpha1) = do
@@ -75,10 +96,81 @@ subTypeOf ctx tyA (TyVarHat alphaName) = do
 
 
 instL :: Ctx -> Ty -> Ty -> TyStateT Ctx
-instL ctx varHat tyA = undefined
+instL ctx (TyVarHat alphaName) tau = do
+  unless (isMonotype tau) $
+    throwError $ "Type " ++ show tau ++ " is not a monotype"
+  unless ((CtxItemHat alphaName) `elem` ctx) $
+    throwError $ "Type variable " ++ alphaName ++ "Hat does not exist in the context."
+  let newItem = CtxEquality alphaName tau
+      gammaAlphaTauGamma' = replaceItem (CtxItemHat alphaName) [newItem] ctx
+  pure gammaAlphaTauGamma'
+instL ctx (TyVarHat alphaName) (TyVarHat betaName) = do
+  unless ((CtxItemHat alphaName) `elem` ctx) $
+    throwError $ "Type variable " ++ alphaName ++ "Hat does not exist in the context."
+
+  let (ctxL, ctxR) = splitOnItem (CtxItemHat alphaName) ctx
+  unless ((CtxItemHat betaName) `elem` ctxR) $
+    throwError $ "Type variable " ++ betaName ++ "Hat does not exist after " ++ alphaName ++ "Hat in the context."
+
+  pure $ ctx |> replaceItem (CtxItemHat betaName) [CtxEquality betaName (TyVarHat alphaName)]
+instL ctx (TyVarHat alphaName) (TyArrow tyA1 tyA2) = do
+  alphaHat1 <- getNewVar alphaName
+  alphaHat2 <- getNewVar alphaName
+  let alphaArrow = TyArrow (TyVarHat alphaHat1) (TyVarHat alphaHat2)
+      newItems = [CtxItem alphaHat2, CtxItem alphaHat1, CtxEquality alphaName alphaArrow]
+      replacedCtx = replaceItem (CtxItemHat alphaName) newItems ctx
+  ctxOmega <- instR replacedCtx tyA1 (TyVarHat alphaHat1)
+  ctxDelta <- instL ctxOmega (TyVarHat alphaHat2) (ctxSubst ctxOmega tyA2)
+  pure ctxDelta 
+instL ctx tyVarAlphaHat@(TyVarHat alphaName) (Forall betaName tyB) = do
+  unless ((CtxItemHat alphaName) `elem` ctx) $
+    throwError $ "Type variable " ++ alphaName ++ "Hat does not exist in the context."
+
+  let ctxExtended = ctx <: (CtxItem betaName)
+
+  ctxDeltaBetaDelta' <- instL ctxExtended tyVarAlphaHat tyB
+
+  let ctxDelta = takeUntilVar (CtxItem betaName) ctxDeltaBetaDelta'
+  pure ctxDelta 
 
 instR :: Ctx -> Ty -> Ty -> TyStateT Ctx
-instR ctx tyA varHat = undefined
+instR ctx tau (TyVarHat alphaName) = do
+  unless (isMonotype tau) $
+    throwError $ "Type " ++ show tau ++ " is not a monotype"
+  unless ((CtxItemHat alphaName) `elem` ctx) $
+    throwError $ "Type variable " ++ alphaName ++ "Hat does not exist in the context."
+  let newItem = CtxEquality alphaName tau
+      gammaAlphaTauGamma' = replaceItem (CtxItemHat alphaName) [newItem] ctx
+  pure gammaAlphaTauGamma'
+instR ctx (TyVarHat betaName) (TyVarHat alphaName) = do
+  unless ((CtxItemHat alphaName) `elem` ctx) $
+    throwError $ "Type variable " ++ alphaName ++ "Hat does not exist in the context."
+
+  let (ctxL, ctxR) = splitOnItem (CtxItemHat alphaName) ctx
+  unless ((CtxItemHat betaName) `elem` ctxR) $
+    throwError $ "Type variable " ++ betaName ++ "Hat does not exist after " ++ alphaName ++ "Hat in the context."
+
+  pure $ ctx |> replaceItem (CtxItemHat betaName) [CtxEquality betaName (TyVarHat alphaName)]
+instR ctx  (TyArrow tyA1 tyA2) (TyVarHat alphaName) = do
+  alphaHat1 <- getNewVar alphaName
+  alphaHat2 <- getNewVar alphaName
+  let alphaArrow = TyArrow (TyVarHat alphaHat1) (TyVarHat alphaHat2)
+      newItems = [CtxItem alphaHat2, CtxItem alphaHat1, CtxEquality alphaName alphaArrow]
+      replacedCtx = replaceItem (CtxItemHat alphaName) newItems ctx
+  ctxOmega <- instL replacedCtx (TyVarHat alphaHat1) tyA1
+  ctxDelta <- instR ctxOmega (ctxSubst ctxOmega tyA2) (TyVarHat alphaHat2) 
+  pure ctxDelta 
+instR ctx (Forall betaName tyB)  tyVarAlphaHat@(TyVarHat alphaName) = do
+  unless ((CtxItemHat alphaName) `elem` ctx) $
+    throwError $ "Type variable " ++ alphaName ++ "Hat does not exist in the context."
+
+  let ctxExtended = ctx <: CtxMarker betaName <: CtxItemHat betaName
+      tyBSubst = tySubst (TyVar betaName) (TyVarHat betaName) tyB
+
+  ctxDeltaMarkerDelta' <- instR ctxExtended tyBSubst tyVarAlphaHat
+
+  let ctxDelta = takeUntilVar (CtxMarker betaName) ctxDeltaMarkerDelta'
+  pure ctxDelta 
 
 
 tyCheck :: Ctx -> Term -> Ty -> TyStateT Ctx
