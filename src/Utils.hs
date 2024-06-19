@@ -20,6 +20,16 @@ find' ((k, v) : rest) lookupKey =
 takeUntilVar :: Eq a => a -> [a] -> [a]
 takeUntilVar x = takeWhile (/= x)
 
+splitOnItem :: Eq a => a -> [a] -> ([a],[a])
+splitOnItem x xs =
+  (takeWhile (/= x) xs, drop 1 $ dropWhile (/= x) xs)
+
+replaceItem :: Eq a => a -> [a] -> [a] -> [a]
+replaceItem x xsR xs =
+  gammaL ++ xsR ++ gammaR
+  where
+    (gammaL, gammaR) = splitOnItem x xs
+
 infixl 5 <:
 (<:) :: [a] -> a -> [a]
 (<:) = snoc

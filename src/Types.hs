@@ -34,7 +34,7 @@ data Ty =
   | TyVarHat String
   | TyArrow Ty Ty
   | Forall String Ty
-  deriving (Eq, Show)
+  deriving (Eq, Ord, Show)
 
 data CtxItem =
     CtxItem String
