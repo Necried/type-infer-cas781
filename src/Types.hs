@@ -28,6 +28,9 @@ data Term =
   | Ann Term Ty
   deriving (Eq, Show)
 
+data Decl = 
+  Decl Name Term (Maybe Ty)
+
 data Ty =
     UnitTy
   | TyVar String
