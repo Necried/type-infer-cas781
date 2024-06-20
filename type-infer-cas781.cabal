@@ -27,6 +27,7 @@ library
   exposed-modules:
       Check
       Lib
+      Test
       Types
       Utils
   other-modules:

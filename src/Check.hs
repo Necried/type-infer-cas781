@@ -12,6 +12,14 @@ import Data.List (find)
 import Types
 import Utils
 
+runTyCheck :: Ctx -> Term -> Ty -> Result Ctx
+runTyCheck ctx term ty =
+  flip evalStateT initMetaData $ tyCheck ctx term ty
+
+runTyInfer :: Ctx -> Term -> Result (Ty, Ctx)
+runTyInfer ctx =
+  flip evalStateT initMetaData . tyInfer ctx
+
 freeVars :: Ty -> Set Ty
 freeVars UnitTy               = Set.empty
 freeVars (TyVar varName)      = Set.singleton (TyVar varName)
@@ -197,10 +205,10 @@ tyInfer ctx (Var x) = do
   return (tyItem varFromCtx, ctx)
   where
     lookupPred :: CtxItem -> Bool
-    lookupPred (CtxItem _) = False
     lookupPred (CtxMapping term ty)
       | term == x = True
       | otherwise = False
+    lookupPred _ = False
 
     errMsg = "Error in tyInfer for Var: variable " ++ show x ++ " not in scope"
 tyInfer ctx UnitTerm = return (UnitTy, ctx)

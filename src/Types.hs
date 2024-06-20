@@ -10,7 +10,7 @@ type TyStateT a = StateT MetaData (Either String) a
 
 data MetaData = MetaData
   { varCounter :: Int
-  }
+  } deriving Show
 
 initMetaData = MetaData 0
 
