@@ -5,6 +5,8 @@ module Test where
 import Types
 import Check
 
+import Control.Applicative
+
 -- Helpers
 
 infixr 1 -->
@@ -21,11 +23,14 @@ idBody = Lam "x" $ Var "x"
 
 -- const a b = a
 constType = Forall "a" $ Forall "b" $ tv "a" --> tv "b" --> tv "a"
+wrongConstType = Forall "a" $ Forall "b" $ tv "a" --> tv "b" --> tv "b"
 constBody = Lam "x" $ Lam "y" $ Var "x"
 
 -- flip f a b = f b a
 flipType = Forall "a" $ Forall "b" $ Forall "c" $
   (tv "a" --> tv "b" --> tv "c") --> tv "b" --> tv "a" --> tv "c"
+wrongFlipType = Forall "a" $ Forall "b" $ Forall "c" $
+  (tv "a" --> tv "b" --> tv "c") --> tv "c" --> tv "a" --> tv "a"
 flipBody = Lam "f" $ Lam "a" $ Lam "b" $ Var "f" `App` Var "b" `App` Var "a"
 
 -- Church-encoded Booleans
@@ -73,7 +78,7 @@ cOrBody = Lam "p" $ Lam "q" $ Lam "t" $ Lam "f" $
 cAndTFeqTBody = Ann cAndBody cAndType `App` cTrueBody `App` cFalseBody
 
 -- Test harness
-runTests = do
+runPassingTests = do
   runTyCheck [] idBody idType
   runTyCheck [] constBody constType
   runTyCheck [] flipBody flipType
@@ -83,3 +88,8 @@ runTests = do
   runTyCheck [] cAndBody cAndType
   runTyCheck [] cOrBody cOrType
   runTyCheck [] cAndTFeqTBody cBoolType
+
+runFailingTests = getZipList $ fmap (runTyCheck []) bodies <*> tys
+  where
+    bodies = ZipList [constBody, flipBody]
+    tys = ZipList [wrongConstType, wrongFlipType]
