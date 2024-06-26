@@ -4,8 +4,15 @@ module Test where
 
 import Types
 import Check
+import Eval
+
+import qualified Data.Map.Strict as M
 
 import Control.Applicative
+
+-----------------
+-- Check Tests --
+-----------------
 
 -- Helpers
 
@@ -93,3 +100,25 @@ runFailingTests = getZipList $ fmap (runTyCheck []) bodies <*> tys
   where
     bodies = ZipList [constBody, flipBody]
     tys = ZipList [wrongConstType, wrongFlipType]
+
+
+----------------
+-- Eval Tests --
+----------------
+
+-- function application has highest precedence, and associates left
+-- NOTE: do not confuse this with the ($) operator!
+infixl 9 |@| -- 9 is the maximum precedence
+
+(|@|) :: Term -> Term -> Term
+(|@|) = App
+
+appId = idBody |@| UnitTerm
+appFlipPartial = flipBody |@| constBody |@| UnitTerm
+appFlip = appFlipPartial |@| UnitTerm 
+
+evalTests = mapM (print . eval M.empty)
+  [ appId
+  , appFlipPartial
+  , appFlip
+  ]
