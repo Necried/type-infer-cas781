@@ -126,8 +126,8 @@ lexColonA = do
     char ':'
     return ColonA
 
-lexColonA :: Lexer RawToken
-lexColonA = do
+lexUnderscoreA :: Lexer RawToken
+lexUnderscoreA = do
     char '_'
     return UnderscoreA
 
