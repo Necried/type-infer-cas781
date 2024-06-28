@@ -31,5 +31,10 @@ e :: forall alpha . alpha -> alpha
 e = \a -> a
 
 -- function with higher-rank polymorphism
-f :: a -> forall alpha . alpha
-f = \a -> a
+-- btw, yes, we can split across lines as long as things don't touch the
+-- left-hand side, like Elm and Haskell :)
+f :: 
+    a 
+    -> forall alpha . alpha
+f = 
+    \a -> a
