@@ -47,34 +47,44 @@ expr = do
             lambda
         ,   term
         ]
-    mT <- optionMaybe $ do
-        myToken HasTypeA
-        type'
-    
-    pure $ case mT of
-        Just t -> Ann e t
-        Nothing -> e
+    do
+        e <- choice
+            [ try $ do
+                myToken HasTypeA
+                t <- type'
+                pure $ Ann e t
+            , pure e
+            ]
+        pure e
 
 
 term :: Parser Expr
-term = 
-    choice
+term = do
+    f <- choice
         [
             factor
         ]
+    choice 
+        [
+            try $ do
+                f' <- factor
+                pure $ App f f'
+        ,   pure f
+        ]
 
 factor :: Parser Expr
-factor = 
+factor = do
     choice
         [
-            Var <$> var
-        ,   unit
-        ,   do
+            try $ do
                 myToken LParenA
                 e <- expr
                 myToken RParenA
                 pure e
+        ,   Var <$> var
+        ,   unit
         ]
+
 
 lambda :: Parser Expr
 lambda = do
@@ -154,6 +164,24 @@ tyForall = do
     myToken PeriodA
     t <- type'
     pure $ Forall v t
+
+
+
+runExprTest :: Text -> IO ()
+runExprTest text = do
+    let lexResult = runParser lexMain () "" text
+    case lexResult of
+        Left err -> print err
+        Right val -> do
+            putStrLn "==== Lexing Results ===="
+            print val
+            let parseResult = runParser expr (ParserState Map.empty) "" val
+            putStrLn "\n==== Parsing Results ===="
+            case parseResult of
+                Left err -> print err
+                Right val -> do
+                    print val
+    pure ()
 
 runTest :: Text -> IO ()
 runTest text = do

@@ -1,6 +1,7 @@
 a :: () -- with type signature
 a = ()
 
+
 {- Parse this file with the following two commands:
 > ghci src/Parser.hs
 > runTestFile "test/Test.txt"
@@ -17,6 +18,9 @@ expression, and the type if there was one!)
 
 -- without type signature
 b = ()
+
+-- without type signature, but with inline type annotation
+b1 = () :: ()
 
 -- lambda function
 c :: () -> ()
@@ -38,3 +42,11 @@ f ::
     -> forall alpha . alpha
 f = 
     \a -> a
+
+-- function application
+g :: ()
+g = f ()
+
+-- anonymous function application
+h :: ()
+h = (\a -> a) ()

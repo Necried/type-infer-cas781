@@ -36,6 +36,7 @@ data RawToken
     | PeriodA
     | HasTypeA
     | ColonA
+    | UnderscoreA
     | ArrowA
     | ForallA
     | UnitA

@@ -52,11 +52,12 @@ lexToken = do
             try lexPeriodA,
             try lexHasTypeA,
             try lexColonA,
+            try lexUnderscoreA,
             try lexArrowA,
             try lexForallA,
+            try lexLambdaA,
             try lexUpperNameA,
             try lexLowerNameA,
-            try lexLambdaA,
             otherToken
         ]
     pos <- getPosition
@@ -124,6 +125,11 @@ lexColonA :: Lexer RawToken
 lexColonA = do
     char ':'
     return ColonA
+
+lexColonA :: Lexer RawToken
+lexColonA = do
+    char '_'
+    return UnderscoreA
 
 lexArrowA :: Lexer RawToken
 lexArrowA = do
