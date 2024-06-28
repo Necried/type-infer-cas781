@@ -26,7 +26,10 @@ source-repository head
 library
   exposed-modules:
       Check
+      Lexer
       Lib
+      Parser
+      Parser.Prelude
       Types
       Utils
   other-modules:
@@ -41,6 +44,8 @@ library
     , containers
     , extra
     , mtl
+    , parsec
+    , text
     , transformers
   default-language: Haskell2010
 
@@ -58,6 +63,8 @@ executable type-infer-cas781-exe
     , containers
     , extra
     , mtl
+    , parsec
+    , text
     , transformers
     , type-infer-cas781
   default-language: Haskell2010
@@ -77,6 +84,8 @@ test-suite type-infer-cas781-test
     , containers
     , extra
     , mtl
+    , parsec
+    , text
     , transformers
     , type-infer-cas781
   default-language: Haskell2010

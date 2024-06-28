@@ -1,0 +1,35 @@
+a :: () -- with type signature
+a = ()
+
+{- Parse this file with the following two commands:
+> ghci src/Parser.hs
+> runTestFile "test/Test.txt"
+
+This will print out the lexing results (all the tokens)
+and the parsing results (a map of declarations, their accompanying
+expression, and the type if there was one!)
+-}
+
+-- Note: due to a weird lexing quirk, you can't put a comment right at the 
+-- start of a file.
+{- But single- and multi-line comments should work otherwise!
+-}
+
+-- without type signature
+b = ()
+
+-- lambda function
+c :: () -> ()
+c = \a -> ()
+
+-- nested lambda functions
+d :: () -> () -> ()
+d = \a -> \b -> ()
+
+-- function with polymorphism
+e :: forall alpha . alpha -> alpha
+e = \a -> a
+
+-- function with higher-rank polymorphism
+f :: a -> forall alpha . alpha
+f = \a -> a
