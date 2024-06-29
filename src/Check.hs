@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Check where
 
 import Control.Monad.Trans.State.Strict
@@ -8,6 +10,8 @@ import Control.Monad (unless, when)
 import qualified Data.Set as Set
 import Data.Set (Set)
 import Data.List (find)
+
+import qualified Data.Text as Text
 
 import Types
 import Utils
@@ -62,7 +66,7 @@ subTypeOf :: Ctx -> Ty -> Ty -> TyStateT Ctx
 subTypeOf ctx (TyVar alpha0) (TyVar alpha1) = do
   -- throw error if they're not the same
   unless (alpha0 == alpha1) $ 
-    throwError $ "Type variable " ++ alpha0 ++ " does not equal " ++ alpha1
+    throwError  $ Text.concat ["Type variable ", alpha0, " does not equal ", alpha1]
   
   pure ctx
 subTypeOf ctx UnitTy UnitTy = pure ctx
@@ -70,7 +74,7 @@ subTypeOf ctx UnitTy UnitTy = pure ctx
 subTypeOf ctx (TyVarHat alpha0) (TyVarHat alpha1) = do
   -- throw error if they're not the same
   unless (alpha0 == alpha1) $ 
-    throwError $ "Type variable " ++ alpha0 ++ "Hat does not equal " ++ alpha1 ++ "Hat"
+    throwError $ Text.concat ["Type variable ", alpha0, "Hat does not equal ", alpha1, "Hat"]
   
   pure ctx
 
@@ -90,35 +94,35 @@ subTypeOf ctx tyA (Forall alphaName tyB) = do
 
 subTypeOf ctx (TyVarHat alphaName) tyA = do
   when (Set.member (TyVarHat alphaName) $ freeVars tyA) $
-    throwError $ "Type variable " ++ alphaName ++ "Hat exists as a free variable in the given type."
+    throwError $ Text.concat["Type variable ", alphaName, "Hat exists as a free variable in the given type."]
   unless ((CtxItemHat alphaName) `elem` ctx) $
-    throwError $ "Type variable " ++ alphaName ++ "Hat does not exist in the context."
+    throwError $ Text.concat ["Type variable ", alphaName, "Hat does not exist in the context."]
   instL ctx (TyVarHat alphaName) tyA
 
 subTypeOf ctx tyA (TyVarHat alphaName) = do
   when (Set.member (TyVarHat alphaName) $ freeVars tyA) $
-    throwError $ "Type variable " ++ alphaName ++ "Hat exists as a free variable in the given type."
+    throwError $ Text.concat ["Type variable ", alphaName, "Hat exists as a free variable in the given type."]
   unless ((CtxItemHat alphaName) `elem` ctx) $
-    throwError $ "Type variable " ++ alphaName ++ "Hat does not exist in the context."
+    throwError $ Text.concat ["Type variable ", alphaName, "Hat does not exist in the context."]
   instR ctx tyA (TyVarHat alphaName)
 
 
 instL :: Ctx -> Ty -> Ty -> TyStateT Ctx
 instL ctx (TyVarHat alphaName) tau = do
   unless (isMonotype tau) $
-    throwError $ "Type " ++ show tau ++ " is not a monotype"
+    throwError $ Text.concat ["Type ", Text.pack $ show tau, " is not a monotype"]
   unless ((CtxItemHat alphaName) `elem` ctx) $
-    throwError $ "Type variable " ++ alphaName ++ "Hat does not exist in the context."
+    throwError $ Text.concat ["Type variable ", alphaName, "Hat does not exist in the context."]
   let newItem = CtxEquality alphaName tau
       gammaAlphaTauGamma' = replaceItem (CtxItemHat alphaName) [newItem] ctx
   pure gammaAlphaTauGamma'
 instL ctx (TyVarHat alphaName) (TyVarHat betaName) = do
   unless ((CtxItemHat alphaName) `elem` ctx) $
-    throwError $ "Type variable " ++ alphaName ++ "Hat does not exist in the context."
+    throwError $ Text.concat ["Type variable ", alphaName, "Hat does not exist in the context."]
 
   let (ctxL, ctxR) = splitOnItem (CtxItemHat alphaName) ctx
   unless ((CtxItemHat betaName) `elem` ctxR) $
-    throwError $ "Type variable " ++ betaName ++ "Hat does not exist after " ++ alphaName ++ "Hat in the context."
+    throwError $ Text.concat ["Type variable ", betaName, "Hat does not exist after ", alphaName, "Hat in the context."]
 
   pure $ ctx |> replaceItem (CtxItemHat betaName) [CtxEquality betaName (TyVarHat alphaName)]
 instL ctx (TyVarHat alphaName) (TyArrow tyA1 tyA2) = do
@@ -132,7 +136,7 @@ instL ctx (TyVarHat alphaName) (TyArrow tyA1 tyA2) = do
   pure ctxDelta 
 instL ctx tyVarAlphaHat@(TyVarHat alphaName) (Forall betaName tyB) = do
   unless ((CtxItemHat alphaName) `elem` ctx) $
-    throwError $ "Type variable " ++ alphaName ++ "Hat does not exist in the context."
+    throwError $ Text.concat ["Type variable ", alphaName, "Hat does not exist in the context."]
 
   let ctxExtended = ctx <: (CtxItem betaName)
 
@@ -144,19 +148,19 @@ instL ctx tyVarAlphaHat@(TyVarHat alphaName) (Forall betaName tyB) = do
 instR :: Ctx -> Ty -> Ty -> TyStateT Ctx
 instR ctx tau (TyVarHat alphaName) = do
   unless (isMonotype tau) $
-    throwError $ "Type " ++ show tau ++ " is not a monotype"
+    throwError $ Text.concat ["Type ", Text.pack $ show tau, " is not a monotype"]
   unless ((CtxItemHat alphaName) `elem` ctx) $
-    throwError $ "Type variable " ++ alphaName ++ "Hat does not exist in the context."
+    throwError $ Text.concat ["Type variable ", alphaName, "Hat does not exist in the context."]
   let newItem = CtxEquality alphaName tau
       gammaAlphaTauGamma' = replaceItem (CtxItemHat alphaName) [newItem] ctx
   pure gammaAlphaTauGamma'
 instR ctx (TyVarHat betaName) (TyVarHat alphaName) = do
   unless ((CtxItemHat alphaName) `elem` ctx) $
-    throwError $ "Type variable " ++ alphaName ++ "Hat does not exist in the context."
+    throwError $ Text.concat ["Type variable ", alphaName, "Hat does not exist in the context."]
 
   let (ctxL, ctxR) = splitOnItem (CtxItemHat alphaName) ctx
   unless ((CtxItemHat betaName) `elem` ctxR) $
-    throwError $ "Type variable " ++ betaName ++ "Hat does not exist after " ++ alphaName ++ "Hat in the context."
+    throwError $ Text.concat ["Type variable ", betaName, "Hat does not exist after ", alphaName, "Hat in the context."]
 
   pure $ ctx |> replaceItem (CtxItemHat betaName) [CtxEquality betaName (TyVarHat alphaName)]
 instR ctx  (TyArrow tyA1 tyA2) (TyVarHat alphaName) = do
@@ -170,7 +174,7 @@ instR ctx  (TyArrow tyA1 tyA2) (TyVarHat alphaName) = do
   pure ctxDelta 
 instR ctx (Forall betaName tyB)  tyVarAlphaHat@(TyVarHat alphaName) = do
   unless ((CtxItemHat alphaName) `elem` ctx) $
-    throwError $ "Type variable " ++ alphaName ++ "Hat does not exist in the context."
+    throwError $ Text.concat ["Type variable ", alphaName, "Hat does not exist in the context."]
 
   let ctxExtended = ctx <: CtxMarker betaName <: CtxItemHat betaName
       tyBSubst = tySubst (TyVar betaName) (TyVarHat betaName) tyB
@@ -181,7 +185,7 @@ instR ctx (Forall betaName tyB)  tyVarAlphaHat@(TyVarHat alphaName) = do
   pure ctxDelta 
 
 
-tyCheck :: Ctx -> Term -> Ty -> TyStateT Ctx
+tyCheck :: Ctx -> Expr -> Ty -> TyStateT Ctx
 tyCheck ctx UnitTerm UnitTy = return ctx
 tyCheck ctx (Lam x e) (TyArrow tyA tyB) = do
   ctxDeltaXAlphaOmega <- tyCheck ctxExtended e tyB
@@ -199,7 +203,7 @@ tyCheck ctx e tyB = do
   where
     subTypeOfCtx = subTypeOf ctx
 
-tyInfer :: Ctx -> Term -> TyStateT (Ty, Ctx)
+tyInfer :: Ctx -> Expr -> TyStateT (Ty, Ctx)
 tyInfer ctx (Var x) = do
   varFromCtx <- lift $ lookupVar lookupPred ctx errMsg
   return (tyItem varFromCtx, ctx)
@@ -210,7 +214,7 @@ tyInfer ctx (Var x) = do
       | otherwise = False
     lookupPred _ = False
 
-    errMsg = "Error in tyInfer for Var: variable " ++ show x ++ " not in scope"
+    errMsg = Text.concat ["Error in tyInfer for Var: variable ", Text.pack $ show x, " not in scope"]
 tyInfer ctx UnitTerm = return (UnitTy, ctx)
 tyInfer ctx (Ann e ty) = do
   ctx' <- tyCheck ctx e ty
@@ -234,7 +238,7 @@ tyInfer ctx (App e1 e2) = do
   
 
 
-tyAppInfer :: Ctx -> Ty -> Term -> TyStateT (Ty, Ctx)
+tyAppInfer :: Ctx -> Ty -> Expr -> TyStateT (Ty, Ctx)
 tyAppInfer ctx (Forall alphaName tyA) e = do
   tyAppInfer ctxExtended (tySubst alpha alphaHat tyA) e
   where

@@ -25,6 +25,8 @@ dependencies:
 - transformers
 - mtl
 - containers
+- parsec
+- text
 
 ghc-options:
 - -Wall
