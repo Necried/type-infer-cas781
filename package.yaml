@@ -27,6 +27,7 @@ dependencies:
 - containers
 - parsec
 - text
+- fgl
 
 ghc-options:
 - -Wall

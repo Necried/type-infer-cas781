@@ -10,7 +10,7 @@ import Control.Monad (unless, when)
 import qualified Data.Set as Set
 import Data.Set (Set)
 import Data.List (find)
-
+import qualified Data.Graph.Inductive.Graph as G
 import qualified Data.Text as Text
 
 import Types
@@ -23,6 +23,15 @@ runTyCheck ctx term ty =
 runTyInfer :: Ctx -> Expr -> Result (Ty, Ctx)
 runTyInfer ctx =
   flip evalStateT initMetaData . tyInfer ctx
+
+constructJudgmentGraph :: Ctx -> Expr -> Maybe Ty -> Result JudgmentGraph
+constructJudgmentGraph ctx e mTy = case mTy of
+  Nothing -> fmap (constructGraph . judgmentBuilder) $
+    flip execStateT initMetaData $ tyInfer ctx e
+  Just checkTy -> fmap (constructGraph . judgmentBuilder) $
+    flip execStateT initMetaData $ tyCheck ctx e checkTy
+  where
+    constructGraph gBuilder = G.mkGraph (nodes gBuilder) (edges gBuilder)
 
 freeVars :: Ty -> Set Ty
 freeVars UnitTy               = Set.empty
@@ -186,19 +195,28 @@ instR ctx (Forall betaName tyB)  tyVarAlphaHat@(TyVarHat alphaName) = do
 
 
 tyCheck :: Ctx -> Expr -> Ty -> TyStateT Ctx
-tyCheck ctx UnitTerm UnitTy = return ctx
+tyCheck ctx UnitTerm UnitTy = do
+  createJudgmentTrace (ctx, UnitTerm, UnitTy) []
+  return ctx
 tyCheck ctx (Lam x e) (TyArrow tyA tyB) = do
   ctxDeltaXAlphaOmega <- tyCheck ctxExtended e tyB
   let ctxDelta = takeUntilVar (CtxMapping x tyA) ctxDeltaXAlphaOmega
+  n <- getNode
+  createJudgmentTrace (ctx, Lam x e, TyArrow tyA tyB) [(n, TyCheck)]
   return ctxDelta
   where
     ctxExtended = ctx <: CtxMapping x tyA
 tyCheck ctx e (Forall alpha tyA) = do
   ctxDeltaAlphaOmega <- tyCheck (ctx <: CtxItem alpha) e tyA
+  n <- getNode
   let ctxDelta = takeUntilVar (CtxItem alpha) ctxDeltaAlphaOmega
+  createJudgmentTrace (ctx, e, Forall alpha tyA) [(n, TyCheck)]
   return ctxDelta
 tyCheck ctx e tyB = do
   (tyA, ctxTheta) <- tyInfer ctx e
+  n <- getNode
+  createJudgmentTrace (ctx, e, tyB) [(n, TyInfer)]
+  -- TODO: Continue with subtyping trace tree here
   ctxSubst ctxTheta tyA `subTypeOfCtx` ctxSubst ctxTheta tyB
   where
     subTypeOfCtx = subTypeOf ctx
@@ -206,6 +224,7 @@ tyCheck ctx e tyB = do
 tyInfer :: Ctx -> Expr -> TyStateT (Ty, Ctx)
 tyInfer ctx (Var x) = do
   varFromCtx <- lift $ lookupVar lookupPred ctx errMsg
+  createJudgmentTrace (ctx, Var x, tyItem varFromCtx) []
   return (tyItem varFromCtx, ctx)
   where
     lookupPred :: CtxItem -> Bool
@@ -215,9 +234,13 @@ tyInfer ctx (Var x) = do
     lookupPred _ = False
 
     errMsg = Text.concat ["Error in tyInfer for Var: variable ", Text.pack $ show x, " not in scope"]
-tyInfer ctx UnitTerm = return (UnitTy, ctx)
+tyInfer ctx UnitTerm = do
+  createJudgmentTrace (ctx, UnitTerm, UnitTy) []
+  pure (UnitTy, ctx)
 tyInfer ctx (Ann e ty) = do
   ctx' <- tyCheck ctx e ty
+  n <- getNode
+  createJudgmentTrace (ctx, Ann e ty, ty) [(n, TyCheck)]
   return (ty, ctx')
 tyInfer ctx (Lam x e) = do
   alphaHat <- getNewVar "alpha"
@@ -231,16 +254,24 @@ tyInfer ctx (Lam x e) = do
     betaHatTyVar = TyVarHat betaHat
   ctxDeltaXAlphaHatOmega <- tyCheck ctxExtended e betaHatTyVar
   let ctxDelta = takeUntilVar xTyAlphaHatItem ctxDeltaXAlphaHatOmega
+  n <- getNode
+  createJudgmentTrace (ctx, Lam x e, betaHatTyVar) [(n, TyCheck)]
   return (TyArrow alphaHatTyVar betaHatTyVar, ctxDelta)
 tyInfer ctx (App e1 e2) = do
   (tyA, ctxOmega) <- tyInfer ctx e1
-  tyAppInfer ctxOmega (ctxSubst ctxOmega tyA) e2
-  
-
+  n1 <- getNode
+  (tyC, ctxDelta) <- tyAppInfer ctxOmega (ctxSubst ctxOmega tyA) e2
+  n2 <- getNode
+  createJudgmentTrace (ctx, App e1 e2, tyC)
+    [(n1, TyInfer), (n2, TyAppInfer)]
+  pure (tyC, ctxDelta)
 
 tyAppInfer :: Ctx -> Ty -> Expr -> TyStateT (Ty, Ctx)
 tyAppInfer ctx (Forall alphaName tyA) e = do
-  tyAppInfer ctxExtended (tySubst alpha alphaHat tyA) e
+  ret <- tyAppInfer ctxExtended (tySubst alpha alphaHat tyA) e
+  n <- getNode
+  createJudgmentTrace (ctx, e, Forall alphaName tyA) [(n, TyAppInfer)]
+  pure ret
   where
     alpha = TyVar alphaName
     alphaHat = TyVarHat alphaName
@@ -248,6 +279,8 @@ tyAppInfer ctx (Forall alphaName tyA) e = do
     ctxExtended = ctx <: itemAlphaHat
 tyAppInfer ctx (TyArrow tyA tyC) e = do
   ctxDelta <- tyCheck ctx e tyA
+  n <- getNode
+  createJudgmentTrace (ctx, e, TyArrow tyA tyC) [(n, TyCheck)]
   return (tyC, ctxDelta)
 tyAppInfer ctx (TyVarHat alphaName) e = do
   alphaHat1 <- getNewVar alphaName
@@ -256,6 +289,8 @@ tyAppInfer ctx (TyVarHat alphaName) e = do
       newItems = [CtxItem alphaHat2, CtxItem alphaHat1, CtxEquality alphaName alphaArrow]
       replacedCtx = replaceItem (CtxItemHat alphaName) newItems ctx
   ctxDelta <- tyCheck replacedCtx e (TyVarHat alphaHat1)
+  n <- getNode
+  createJudgmentTrace (ctx, e, TyVarHat alphaName) [(n, TyCheck)]
   return (TyVarHat alphaHat2, ctxDelta)
 -- Gamma[alpha] == CtxLeft, alpha, CtxRight
 -- Gamma[alpha] -> Gamma[a2Hat, a1Hat, a = a1Hat -> a2Hat]

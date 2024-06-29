@@ -45,6 +45,7 @@ library
       base >=4.7 && <5
     , containers
     , extra
+    , fgl
     , mtl
     , parsec
     , text
@@ -64,6 +65,7 @@ executable type-infer-cas781-exe
       base >=4.7 && <5
     , containers
     , extra
+    , fgl
     , mtl
     , parsec
     , text
@@ -85,6 +87,7 @@ test-suite type-infer-cas781-test
       base >=4.7 && <5
     , containers
     , extra
+    , fgl
     , mtl
     , parsec
     , text
