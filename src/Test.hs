@@ -1,4 +1,5 @@
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Test where
 
@@ -110,7 +111,7 @@ runFailingTests = getZipList $ fmap (runTyCheck []) bodies <*> tys
 -- NOTE: do not confuse this with the ($) operator!
 infixl 9 |@| -- 9 is the maximum precedence
 
-(|@|) :: Term -> Term -> Term
+(|@|) :: Expr -> Expr -> Expr
 (|@|) = App
 
 appId = idBody |@| UnitTerm

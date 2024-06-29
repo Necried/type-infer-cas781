@@ -16,11 +16,11 @@ import qualified Data.Text as Text
 import Types
 import Utils
 
-runTyCheck :: Ctx -> Term -> Ty -> Result Ctx
+runTyCheck :: Ctx -> Expr -> Ty -> Result Ctx
 runTyCheck ctx term ty =
   flip evalStateT initMetaData $ tyCheck ctx term ty
 
-runTyInfer :: Ctx -> Term -> Result (Ty, Ctx)
+runTyInfer :: Ctx -> Expr -> Result (Ty, Ctx)
 runTyInfer ctx =
   flip evalStateT initMetaData . tyInfer ctx
 

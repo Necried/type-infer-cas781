@@ -1,12 +1,17 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Eval where
 
 import Types
 
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
+import Data.Text (Text)
 
+-- NOTE: Currently unused: The environment performs the
+-- substitution now.
 -- termSubst [x := t]E
-termSubst :: String -> Term -> Term -> Term
+termSubst :: Text -> Expr -> Expr -> Expr
 termSubst _ _ UnitTerm = UnitTerm
 termSubst x t (Var y)
   | x == y = t
@@ -22,22 +27,22 @@ termSubst x t (Ann e _) =
 
 data Value =
     UnitValue
-  | LamValue String (Value -> Value)
+  | LamValue Text (Value -> Value)
   | NValue NeutralValue
   
 data NeutralValue =
-    NFree String
+    NFree Text
   | NApp NeutralValue Value
   deriving (Show)
 
 instance Show Value where
   show UnitValue = "UnitValue"
-  show (LamValue x f) = "\\" ++ x ++ ". " ++ show (f (NValue $ NFree x))
+  show (LamValue x f) = "\\" ++ show x ++ ". " ++ show (f (NValue $ NFree x))
   show (NValue nv) = show nv
  
-type Env = Map String Value
+type Env = Map Text Value
 
-eval :: Env -> Term -> Value
+eval :: Env -> Expr -> Value
 eval env UnitTerm = UnitValue
 eval env (Var x) =
   case M.lookup x env of
