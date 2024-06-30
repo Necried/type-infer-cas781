@@ -26,6 +26,7 @@ source-repository head
 library
   exposed-modules:
       Check
+      Dot
       Eval
       Lexer
       Lib
@@ -34,6 +35,7 @@ library
       Test
       Types
       Utils
+      Utils.Dot
   other-modules:
       Paths_type_infer_cas781
   autogen-modules:

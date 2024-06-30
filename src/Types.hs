@@ -25,6 +25,7 @@ data FunctionCall =
   | InstL
   | InstR
   | SubtypeOf
+  deriving (Show)
 
 data GBuilder = GBuilder
   { nodeCounter :: Int

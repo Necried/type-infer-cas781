@@ -15,6 +15,7 @@ import qualified Data.Text as Text
 
 import Types
 import Utils
+import Dot
 
 runTyCheck :: Ctx -> Expr -> Ty -> Result Ctx
 runTyCheck ctx term ty =
@@ -32,6 +33,13 @@ constructJudgmentGraph ctx e mTy = case mTy of
     flip execStateT initMetaData $ tyCheck ctx e checkTy
   where
     constructGraph gBuilder = G.mkGraph (nodes gBuilder) (edges gBuilder)
+
+dotJudgmentGraph :: Ctx -> Expr -> Maybe Ty -> String -> IO ()
+dotJudgmentGraph ctx e mTy s =
+  let graphRes = constructJudgmentGraph ctx e mTy
+  in case graphRes of
+    Left err -> print err
+    Right g -> dotToFile s g
 
 freeVars :: Ty -> Set Ty
 freeVars UnitTy               = Set.empty

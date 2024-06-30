@@ -6,6 +6,7 @@ module Test where
 import Types
 import Check
 import Eval
+import Dot
 
 import qualified Data.Map.Strict as M
 
@@ -102,7 +103,11 @@ runFailingTests = getZipList $ fmap (runTyCheck []) bodies <*> tys
     bodies = ZipList [constBody, flipBody]
     tys = ZipList [wrongConstType, wrongFlipType]
 
-
+runMkGraphs = do
+  dotJudgmentGraph [] idBody (Just idType) "id"
+  dotJudgmentGraph [] constBody (Just constType) "const"
+  dotJudgmentGraph [] flipBody (Just flipType) "flip"
+  
 ----------------
 -- Eval Tests --
 ----------------
