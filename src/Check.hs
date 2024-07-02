@@ -80,60 +80,77 @@ ctxSubst ctx (TyArrow tyA tyB) = TyArrow (ctxSubst ctx tyA) (ctxSubst ctx tyB)
 ctxSubst ctx (Forall alphaName tyA) = Forall alphaName (ctxSubst ctx tyA)
 
 subTypeOf :: Ctx -> Ty -> Ty -> TyStateT Ctx
-subTypeOf ctx (TyVar alpha0) (TyVar alpha1) = do
+subTypeOf ctx tv0@(TyVar alpha0) tv1@(TyVar alpha1) = do
   -- throw error if they're not the same
   unless (alpha0 == alpha1) $ 
     throwError  $ Text.concat ["Type variable ", alpha0, " does not equal ", alpha1]
-  
+  createJudgmentTrace (SubtypeTrace (ctx, tv0, tv1)) []
   pure ctx
-subTypeOf ctx UnitTy UnitTy = pure ctx
 
-subTypeOf ctx (TyVarHat alpha0) (TyVarHat alpha1) = do
+subTypeOf ctx UnitTy UnitTy = do
+  createJudgmentTrace (SubtypeTrace (ctx, UnitTy, UnitTy)) []
+  pure ctx
+
+subTypeOf ctx a1@(TyVarHat alpha0) a2@(TyVarHat alpha1) = do
   -- throw error if they're not the same
   unless (alpha0 == alpha1) $ 
     throwError $ Text.concat ["Type variable ", alpha0, "Hat does not equal ", alpha1, "Hat"]
-  
+  createJudgmentTrace (SubtypeTrace (ctx, a1, a2)) []
   pure ctx
 
-subTypeOf ctx (TyArrow tyA1 tyA2) (TyArrow tyB1 tyB2) = do
+subTypeOf ctx a1@(TyArrow tyA1 tyA2) a2@(TyArrow tyB1 tyB2) = do
   ctxOmega <- subTypeOf ctx tyB1 tyA1
-  subTypeOf ctxOmega (ctxSubst ctxOmega tyA2) (ctxSubst ctxOmega tyB2)
+  n1 <- getNode
+  ctxDelta <- subTypeOf ctxOmega (ctxSubst ctxOmega tyA2) (ctxSubst ctxOmega tyB2)
+  n2 <- getNode
+  createJudgmentTrace (SubtypeTrace (ctx, a1, a2)) [(n1, SubtypeOf), (n2, SubtypeOf)]
+  pure ctxDelta
 
-subTypeOf ctx (Forall alphaName tyA) tyB = do
+subTypeOf ctx forTy@(Forall alphaName tyA) tyB = do
   let ctxExtended = ctx <: CtxMarker alphaName <: CtxItemHat alphaName
   ctxDeltaMarkerOmega <- subTypeOf ctxExtended (tySubst (TyVar alphaName) (TyVarHat alphaName) tyA) tyB
+  n <- getNode
+  createJudgmentTrace (SubtypeTrace (ctx, forTy, tyB)) [(n, SubtypeOf)]
   pure $ takeUntilVar (CtxMarker alphaName) ctxDeltaMarkerOmega
 
-subTypeOf ctx tyA (Forall alphaName tyB) = do
+subTypeOf ctx tyA forTy@(Forall alphaName tyB) = do
   let ctxExtended = ctx <: CtxItem alphaName
   ctxDeltaAlphaOmega <- subTypeOf ctxExtended tyA tyB
+  n <- getNode
+  createJudgmentTrace (SubtypeTrace (ctx, tyA, forTy)) [(n, SubtypeOf)]
   pure $ takeUntilVar (CtxItem alphaName) ctxDeltaAlphaOmega
 
-subTypeOf ctx (TyVarHat alphaName) tyA = do
+subTypeOf ctx aHat@(TyVarHat alphaName) tyA = do
   when (Set.member (TyVarHat alphaName) $ freeVars tyA) $
     throwError $ Text.concat["Type variable ", alphaName, "Hat exists as a free variable in the given type."]
   unless ((CtxItemHat alphaName) `elem` ctx) $
     throwError $ Text.concat ["Type variable ", alphaName, "Hat does not exist in the context."]
-  instL ctx (TyVarHat alphaName) tyA
+  ctxDelta <- instL ctx (TyVarHat alphaName) tyA
+  n <- getNode
+  createJudgmentTrace (SubtypeTrace (ctx, aHat, tyA)) [(n, InstL)]
+  pure ctxDelta
 
-subTypeOf ctx tyA (TyVarHat alphaName) = do
+subTypeOf ctx tyA aHat@(TyVarHat alphaName) = do
   when (Set.member (TyVarHat alphaName) $ freeVars tyA) $
     throwError $ Text.concat ["Type variable ", alphaName, "Hat exists as a free variable in the given type."]
   unless ((CtxItemHat alphaName) `elem` ctx) $
     throwError $ Text.concat ["Type variable ", alphaName, "Hat does not exist in the context."]
-  instR ctx tyA (TyVarHat alphaName)
-
+  ctxDelta <- instR ctx tyA (TyVarHat alphaName)
+  n <- getNode
+  createJudgmentTrace (SubtypeTrace (ctx, tyA, aHat)) [(n, InstR)]
+  pure ctxDelta
 
 instL :: Ctx -> Ty -> Ty -> TyStateT Ctx
-instL ctx (TyVarHat alphaName) tau = do
+instL ctx tvHat@(TyVarHat alphaName) tau = do
   unless (isMonotype tau) $
     throwError $ Text.concat ["Type ", Text.pack $ show tau, " is not a monotype"]
   unless ((CtxItemHat alphaName) `elem` ctx) $
     throwError $ Text.concat ["Type variable ", alphaName, "Hat does not exist in the context."]
   let newItem = CtxEquality alphaName tau
       gammaAlphaTauGamma' = replaceItem (CtxItemHat alphaName) [newItem] ctx
+  createJudgmentTrace (InstLTrace (ctx, tvHat, tau)) []
   pure gammaAlphaTauGamma'
-instL ctx (TyVarHat alphaName) (TyVarHat betaName) = do
+instL ctx tvAlpha@(TyVarHat alphaName) tvBeta@(TyVarHat betaName) = do
   unless ((CtxItemHat alphaName) `elem` ctx) $
     throwError $ Text.concat ["Type variable ", alphaName, "Hat does not exist in the context."]
 
@@ -141,37 +158,43 @@ instL ctx (TyVarHat alphaName) (TyVarHat betaName) = do
   unless ((CtxItemHat betaName) `elem` ctxR) $
     throwError $ Text.concat ["Type variable ", betaName, "Hat does not exist after ", alphaName, "Hat in the context."]
 
+  createJudgmentTrace (InstLTrace (ctx, tvAlpha, tvBeta)) []
   pure $ ctx |> replaceItem (CtxItemHat betaName) [CtxEquality betaName (TyVarHat alphaName)]
-instL ctx (TyVarHat alphaName) (TyArrow tyA1 tyA2) = do
+instL ctx tvHat@(TyVarHat alphaName) tArr@(TyArrow tyA1 tyA2) = do
   alphaHat1 <- getNewVar alphaName
   alphaHat2 <- getNewVar alphaName
   let alphaArrow = TyArrow (TyVarHat alphaHat1) (TyVarHat alphaHat2)
       newItems = [CtxItem alphaHat2, CtxItem alphaHat1, CtxEquality alphaName alphaArrow]
       replacedCtx = replaceItem (CtxItemHat alphaName) newItems ctx
   ctxOmega <- instR replacedCtx tyA1 (TyVarHat alphaHat1)
+  n1 <- getNode
   ctxDelta <- instL ctxOmega (TyVarHat alphaHat2) (ctxSubst ctxOmega tyA2)
+  n2 <- getNode
+  createJudgmentTrace (InstLTrace (ctx, tvHat, tArr)) [(n1, InstR), (n2, InstL)]
   pure ctxDelta 
-instL ctx tyVarAlphaHat@(TyVarHat alphaName) (Forall betaName tyB) = do
+instL ctx tyVarAlphaHat@(TyVarHat alphaName) forTy@(Forall betaName tyB) = do
   unless ((CtxItemHat alphaName) `elem` ctx) $
     throwError $ Text.concat ["Type variable ", alphaName, "Hat does not exist in the context."]
 
   let ctxExtended = ctx <: (CtxItem betaName)
 
   ctxDeltaBetaDelta' <- instL ctxExtended tyVarAlphaHat tyB
-
+  n <- getNode
   let ctxDelta = takeUntilVar (CtxItem betaName) ctxDeltaBetaDelta'
+  createJudgmentTrace (InstLTrace (ctx, tyVarAlphaHat, forTy)) [(n, InstL)]
   pure ctxDelta 
 
 instR :: Ctx -> Ty -> Ty -> TyStateT Ctx
-instR ctx tau (TyVarHat alphaName) = do
+instR ctx tau tvHat@(TyVarHat alphaName) = do
   unless (isMonotype tau) $
     throwError $ Text.concat ["Type ", Text.pack $ show tau, " is not a monotype"]
   unless ((CtxItemHat alphaName) `elem` ctx) $
     throwError $ Text.concat ["Type variable ", alphaName, "Hat does not exist in the context."]
   let newItem = CtxEquality alphaName tau
       gammaAlphaTauGamma' = replaceItem (CtxItemHat alphaName) [newItem] ctx
+  createJudgmentTrace (InstRTrace (ctx, tvHat, tau)) []
   pure gammaAlphaTauGamma'
-instR ctx (TyVarHat betaName) (TyVarHat alphaName) = do
+instR ctx tvBeta@(TyVarHat betaName) tvAlpha@(TyVarHat alphaName) = do
   unless ((CtxItemHat alphaName) `elem` ctx) $
     throwError $ Text.concat ["Type variable ", alphaName, "Hat does not exist in the context."]
 
@@ -179,17 +202,22 @@ instR ctx (TyVarHat betaName) (TyVarHat alphaName) = do
   unless ((CtxItemHat betaName) `elem` ctxR) $
     throwError $ Text.concat ["Type variable ", betaName, "Hat does not exist after ", alphaName, "Hat in the context."]
 
+
+  createJudgmentTrace (InstRTrace (ctx, tvBeta, tvAlpha)) []
   pure $ ctx |> replaceItem (CtxItemHat betaName) [CtxEquality betaName (TyVarHat alphaName)]
-instR ctx  (TyArrow tyA1 tyA2) (TyVarHat alphaName) = do
+instR ctx tArr@(TyArrow tyA1 tyA2) tvHat@(TyVarHat alphaName) = do
   alphaHat1 <- getNewVar alphaName
   alphaHat2 <- getNewVar alphaName
   let alphaArrow = TyArrow (TyVarHat alphaHat1) (TyVarHat alphaHat2)
       newItems = [CtxItem alphaHat2, CtxItem alphaHat1, CtxEquality alphaName alphaArrow]
       replacedCtx = replaceItem (CtxItemHat alphaName) newItems ctx
   ctxOmega <- instL replacedCtx (TyVarHat alphaHat1) tyA1
+  n1 <- getNode
   ctxDelta <- instR ctxOmega (ctxSubst ctxOmega tyA2) (TyVarHat alphaHat2) 
+  n2 <- getNode
+  createJudgmentTrace (InstRTrace (ctx, tArr, tvHat)) [(n1, InstL), (n2, InstR)]
   pure ctxDelta 
-instR ctx (Forall betaName tyB)  tyVarAlphaHat@(TyVarHat alphaName) = do
+instR ctx forTy@(Forall betaName tyB)  tyVarAlphaHat@(TyVarHat alphaName) = do
   unless ((CtxItemHat alphaName) `elem` ctx) $
     throwError $ Text.concat ["Type variable ", alphaName, "Hat does not exist in the context."]
 
@@ -197,20 +225,23 @@ instR ctx (Forall betaName tyB)  tyVarAlphaHat@(TyVarHat alphaName) = do
       tyBSubst = tySubst (TyVar betaName) (TyVarHat betaName) tyB
 
   ctxDeltaMarkerDelta' <- instR ctxExtended tyBSubst tyVarAlphaHat
-
+  n <- getNode
+  
   let ctxDelta = takeUntilVar (CtxMarker betaName) ctxDeltaMarkerDelta'
+  
+  createJudgmentTrace (InstRTrace (ctx, forTy, tyVarAlphaHat)) [(n, InstR)]
   pure ctxDelta 
 
 
 tyCheck :: Ctx -> Expr -> Ty -> TyStateT Ctx
 tyCheck ctx UnitTerm UnitTy = do
-  createJudgmentTrace (ctx, UnitTerm, UnitTy) []
+  createJudgmentTrace (AlgTypingTrace (ctx, UnitTerm, UnitTy)) []
   return ctx
 tyCheck ctx (Lam x e) (TyArrow tyA tyB) = do
   ctxDeltaXAlphaOmega <- tyCheck ctxExtended e tyB
   let ctxDelta = takeUntilVar (CtxMapping x tyA) ctxDeltaXAlphaOmega
   n <- getNode
-  createJudgmentTrace (ctx, Lam x e, TyArrow tyA tyB) [(n, TyCheck)]
+  createJudgmentTrace (AlgTypingTrace (ctx, Lam x e, TyArrow tyA tyB)) [(n, TyCheck)]
   return ctxDelta
   where
     ctxExtended = ctx <: CtxMapping x tyA
@@ -218,21 +249,24 @@ tyCheck ctx e (Forall alpha tyA) = do
   ctxDeltaAlphaOmega <- tyCheck (ctx <: CtxItem alpha) e tyA
   n <- getNode
   let ctxDelta = takeUntilVar (CtxItem alpha) ctxDeltaAlphaOmega
-  createJudgmentTrace (ctx, e, Forall alpha tyA) [(n, TyCheck)]
+  createJudgmentTrace (AlgTypingTrace (ctx, e, Forall alpha tyA)) [(n, TyCheck)]
   return ctxDelta
 tyCheck ctx e tyB = do
   (tyA, ctxTheta) <- tyInfer ctx e
-  n <- getNode
-  createJudgmentTrace (ctx, e, tyB) [(n, TyInfer)]
-  -- TODO: Continue with subtyping trace tree here
-  ctxSubst ctxTheta tyA `subTypeOfCtx` ctxSubst ctxTheta tyB
+  n1 <- getNode
+
+  ctxDelta <- ctxSubst ctxTheta tyA `subTypeOfCtx` ctxSubst ctxTheta tyB
+  n2 <- getNode
+
+  createJudgmentTrace (AlgTypingTrace (ctx, e, tyB)) [(n1, TyInfer), (n2, SubtypeOf)]
+  pure ctxDelta
   where
     subTypeOfCtx = subTypeOf ctx
 
 tyInfer :: Ctx -> Expr -> TyStateT (Ty, Ctx)
 tyInfer ctx (Var x) = do
   varFromCtx <- lift $ lookupVar lookupPred ctx errMsg
-  createJudgmentTrace (ctx, Var x, tyItem varFromCtx) []
+  createJudgmentTrace (AlgTypingTrace (ctx, Var x, tyItem varFromCtx)) []
   return (tyItem varFromCtx, ctx)
   where
     lookupPred :: CtxItem -> Bool
@@ -243,12 +277,12 @@ tyInfer ctx (Var x) = do
 
     errMsg = Text.concat ["Error in tyInfer for Var: variable ", Text.pack $ show x, " not in scope"]
 tyInfer ctx UnitTerm = do
-  createJudgmentTrace (ctx, UnitTerm, UnitTy) []
+  createJudgmentTrace (AlgTypingTrace (ctx, UnitTerm, UnitTy)) []
   pure (UnitTy, ctx)
 tyInfer ctx (Ann e ty) = do
   ctx' <- tyCheck ctx e ty
   n <- getNode
-  createJudgmentTrace (ctx, Ann e ty, ty) [(n, TyCheck)]
+  createJudgmentTrace (AlgTypingTrace (ctx, Ann e ty, ty)) [(n, TyCheck)]
   return (ty, ctx')
 tyInfer ctx (Lam x e) = do
   alphaHat <- getNewVar "alpha"
@@ -263,14 +297,14 @@ tyInfer ctx (Lam x e) = do
   ctxDeltaXAlphaHatOmega <- tyCheck ctxExtended e betaHatTyVar
   let ctxDelta = takeUntilVar xTyAlphaHatItem ctxDeltaXAlphaHatOmega
   n <- getNode
-  createJudgmentTrace (ctx, Lam x e, betaHatTyVar) [(n, TyCheck)]
+  createJudgmentTrace (AlgTypingTrace (ctx, Lam x e, betaHatTyVar)) [(n, TyCheck)]
   return (TyArrow alphaHatTyVar betaHatTyVar, ctxDelta)
 tyInfer ctx (App e1 e2) = do
   (tyA, ctxOmega) <- tyInfer ctx e1
   n1 <- getNode
   (tyC, ctxDelta) <- tyAppInfer ctxOmega (ctxSubst ctxOmega tyA) e2
   n2 <- getNode
-  createJudgmentTrace (ctx, App e1 e2, tyC)
+  createJudgmentTrace (AlgTypingTrace (ctx, App e1 e2, tyC))
     [(n1, TyInfer), (n2, TyAppInfer)]
   pure (tyC, ctxDelta)
 
@@ -278,7 +312,7 @@ tyAppInfer :: Ctx -> Ty -> Expr -> TyStateT (Ty, Ctx)
 tyAppInfer ctx (Forall alphaName tyA) e = do
   ret <- tyAppInfer ctxExtended (tySubst alpha alphaHat tyA) e
   n <- getNode
-  createJudgmentTrace (ctx, e, Forall alphaName tyA) [(n, TyAppInfer)]
+  createJudgmentTrace (AlgTypingTrace (ctx, e, Forall alphaName tyA)) [(n, TyAppInfer)]
   pure ret
   where
     alpha = TyVar alphaName
@@ -288,7 +322,7 @@ tyAppInfer ctx (Forall alphaName tyA) e = do
 tyAppInfer ctx (TyArrow tyA tyC) e = do
   ctxDelta <- tyCheck ctx e tyA
   n <- getNode
-  createJudgmentTrace (ctx, e, TyArrow tyA tyC) [(n, TyCheck)]
+  createJudgmentTrace (AlgTypingTrace (ctx, e, TyArrow tyA tyC)) [(n, TyCheck)]
   return (tyC, ctxDelta)
 tyAppInfer ctx (TyVarHat alphaName) e = do
   alphaHat1 <- getNewVar alphaName
@@ -298,7 +332,7 @@ tyAppInfer ctx (TyVarHat alphaName) e = do
       replacedCtx = replaceItem (CtxItemHat alphaName) newItems ctx
   ctxDelta <- tyCheck replacedCtx e (TyVarHat alphaHat1)
   n <- getNode
-  createJudgmentTrace (ctx, e, TyVarHat alphaName) [(n, TyCheck)]
+  createJudgmentTrace (AlgTypingTrace (ctx, e, TyVarHat alphaName)) [(n, TyCheck)]
   return (TyVarHat alphaHat2, ctxDelta)
 -- Gamma[alpha] == CtxLeft, alpha, CtxRight
 -- Gamma[alpha] -> Gamma[a2Hat, a1Hat, a = a1Hat -> a2Hat]

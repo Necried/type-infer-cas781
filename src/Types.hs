@@ -13,7 +13,12 @@ type Result a = Either Text a
 
 type TyStateT a = StateT MetaData (Either Text) a
 
-type JudgmentTrace = (Ctx, Expr, Ty)
+data JudgmentTrace =
+    AlgTypingTrace (Ctx, Expr, Ty)
+  | SubtypeTrace (Ctx, Ty, Ty)
+  | InstLTrace (Ctx, Ty, Ty)
+  | InstRTrace (Ctx, Ty, Ty)
+  deriving Show
 
 type JudgmentGraph = PT.Gr JudgmentTrace FunctionCall
 
