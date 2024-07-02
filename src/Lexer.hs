@@ -210,6 +210,10 @@ otherToken = do
     txt <- manyTill anyChar spaces1
     return $ OtherA $ Text.pack txt
 
+runLex :: Text -> Either ParseError [Token]
+runLex text =
+    runParser lexMain () "" text
+
 runTest :: Text -> IO ()
 runTest text = do
     let result = runParser lexMain () "" text

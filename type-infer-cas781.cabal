@@ -30,6 +30,7 @@ library
       Lib
       Parser
       Parser.Prelude
+      Pretty
       Types
       Utils
   other-modules:
@@ -45,6 +46,7 @@ library
     , extra
     , mtl
     , parsec
+    , prettyprinter
     , text
     , transformers
   default-language: Haskell2010
@@ -64,6 +66,7 @@ executable type-infer-cas781-exe
     , extra
     , mtl
     , parsec
+    , prettyprinter
     , text
     , transformers
     , type-infer-cas781
@@ -85,6 +88,7 @@ test-suite type-infer-cas781-test
     , extra
     , mtl
     , parsec
+    , prettyprinter
     , text
     , transformers
     , type-infer-cas781

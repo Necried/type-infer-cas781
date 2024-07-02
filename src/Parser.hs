@@ -5,13 +5,17 @@ module Parser where
 import Text.Parsec
 import Types
 import Parser.Prelude
-import Lexer (lexMain)
+import Lexer (lexMain, runLex)
 
 import qualified Data.Text.IO as TIO
 import qualified Data.Text as Text
 import Data.Text (Text)
 
 import qualified Data.Map as Map
+
+import Data.Text.Prettyprint.Doc
+import Pretty
+
 
 declarations :: Parser DeclMap
 declarations = do
@@ -165,17 +169,19 @@ tyForall = do
     t <- type'
     pure $ Forall v t
 
-
+runParse :: [Token] -> Either ParseError DeclMap
+runParse tokens =
+    runParser declarations (ParserState Map.empty) "" tokens
 
 runExprTest :: Text -> IO ()
 runExprTest text = do
-    let lexResult = runParser lexMain () "" text
+    let lexResult = runLex text
     case lexResult of
         Left err -> print err
-        Right val -> do
+        Right tokens -> do
             putStrLn "==== Lexing Results ===="
-            print val
-            let parseResult = runParser expr (ParserState Map.empty) "" val
+            print tokens
+            let parseResult = runParse tokens
             putStrLn "\n==== Parsing Results ===="
             case parseResult of
                 Left err -> print err
@@ -185,18 +191,18 @@ runExprTest text = do
 
 runTest :: Text -> IO ()
 runTest text = do
-    let lexResult = runParser lexMain () "" text
+    let lexResult = runLex text
     case lexResult of
         Left err -> print err
-        Right val -> do
+        Right tokens -> do
             putStrLn "==== Lexing Results ===="
-            print val
-            let parseResult = runParser declarations (ParserState Map.empty) "" val
+            print tokens
+            let parseResult = runParse tokens
             putStrLn "\n==== Parsing Results ===="
             case parseResult of
                 Left err -> print err
                 Right val -> do
-                    print val
+                    print $ pretty val
     pure ()
 
 runTestFile :: FilePath -> IO ()
