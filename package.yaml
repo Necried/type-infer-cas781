@@ -25,6 +25,10 @@ dependencies:
 - transformers
 - mtl
 - containers
+- parsec
+- text
+- fgl
+- prettyprinter
 
 ghc-options:
 - -Wall

@@ -26,9 +26,17 @@ source-repository head
 library
   exposed-modules:
       Check
+      Dot
+      Eval
+      Lexer
       Lib
+      Parser
+      Parser.Prelude
+      Pretty
+      Test
       Types
       Utils
+      Utils.Dot
   other-modules:
       Paths_type_infer_cas781
   autogen-modules:
@@ -40,7 +48,11 @@ library
       base >=4.7 && <5
     , containers
     , extra
+    , fgl
     , mtl
+    , parsec
+    , prettyprinter
+    , text
     , transformers
   default-language: Haskell2010
 
@@ -57,7 +69,11 @@ executable type-infer-cas781-exe
       base >=4.7 && <5
     , containers
     , extra
+    , fgl
     , mtl
+    , parsec
+    , prettyprinter
+    , text
     , transformers
     , type-infer-cas781
   default-language: Haskell2010
@@ -76,7 +92,11 @@ test-suite type-infer-cas781-test
       base >=4.7 && <5
     , containers
     , extra
+    , fgl
     , mtl
+    , parsec
+    , prettyprinter
+    , text
     , transformers
     , type-infer-cas781
   default-language: Haskell2010

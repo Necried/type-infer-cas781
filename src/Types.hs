@@ -4,47 +4,117 @@ import Utils
 
 import Control.Monad.Trans.State.Strict
 
-type Result a = Either String a
+import Data.Text (Text)
+import qualified Data.Text as Text
+import qualified Data.Graph.Inductive.Graph as G
+import qualified Data.Graph.Inductive.PatriciaTree as PT
 
-type TyStateT a = StateT MetaData (Either String) a
+type Result a = Either Text a
+
+type TyStateT a = StateT MetaData (Either Text) a
+
+type RuleName = Text
+
+data JudgmentTrace =
+    AlgTypingTrace RuleName (Ctx, Expr, Ty)
+  | SubtypeTrace RuleName (Ctx, Ty, Ty)
+  | InstLTrace RuleName (Ctx, Ty, Ty)
+  | InstRTrace RuleName (Ctx, Ty, Ty)
+  deriving Show
+
+type JudgmentGraph = PT.Gr JudgmentTrace FunctionCall
+
+data FunctionCall =
+    TyCheck
+  | TyInfer
+  | TyAppInfer
+  -- TODO: Unimplemented in Check.hs
+  | InstL
+  | InstR
+  | SubtypeOf
+  deriving (Show)
+
+data GBuilder = GBuilder
+  { nodeCounter :: Int
+  , nodes :: [G.LNode JudgmentTrace]
+  , edges :: [G.LEdge FunctionCall]
+  }
 
 data MetaData = MetaData
   { varCounter :: Int
+  , judgmentBuilder :: GBuilder
   }
 
-initMetaData = MetaData 0
+initMetaData :: MetaData
+initMetaData = MetaData 0 initGBuilder
+  where
+    initGBuilder = GBuilder 0 [] []
 
-getNewVar :: String -> TyStateT String
+getNewVar :: Text -> TyStateT Text
 getNewVar varName = do
   v <- gets varCounter
   modify $ \s -> s { varCounter = v + 1 }
-  return $ varName ++ show v
+  return $ Text.concat [varName, Text.pack $ show v]
 
-data Term =
-    Var String
+-- NOTE: This assumes a call to `createJudgmentTrace` after the
+-- child node is fully constructed!
+getNode :: TyStateT Int
+getNode = pred <$> gets (nodeCounter . judgmentBuilder)
+
+-- `createJudgmentTrace src tgts` takes a src node,
+-- and a list of (tgtNode, edge) pair, and connects
+-- src --edge--> tgtNode
+createJudgmentTrace ::
+  JudgmentTrace ->
+  [(G.Node, FunctionCall)] ->
+  TyStateT ()
+createJudgmentTrace srcLabel [] = do
+  builder <- gets judgmentBuilder
+  let curNodes = nodes builder
+      srcNode = nodeCounter builder
+  modify $ \s -> s
+    { judgmentBuilder = builder
+      { nodes = (srcNode, srcLabel) : curNodes
+      , nodeCounter = srcNode + 1
+      }
+    }
+createJudgmentTrace srcLabel ((tgtNode, edgeLabel):rest) = do
+  builder <- gets judgmentBuilder
+  let curEdges = edges builder
+      srcNode = nodeCounter builder
+  modify $ \s -> s
+    { judgmentBuilder = builder
+      { edges = (srcNode, tgtNode, edgeLabel):curEdges }
+    }
+  createJudgmentTrace srcLabel rest
+
+data Expr =
+    Var Text
   | UnitTerm
-  | Lam String Term
-  | App Term Term
-  | Ann Term Ty
+  | Lam Text Expr
+  | App Expr Expr
+  | Ann Expr Ty
   deriving (Eq, Show)
 
+type Name = Text
+
 data Decl = 
-  Decl Name Term (Maybe Ty)
+  Decl Name Expr (Maybe Ty)
 
 data Ty =
     UnitTy
-  | TyVar String
-  | TyVarHat String
+  | TyVar Text
+  | TyVarHat Text
   | TyArrow Ty Ty
-  | Forall String Ty
+  | Forall Text Ty
   deriving (Eq, Ord, Show)
 
 data CtxItem =
-    CtxItem String
-  | CtxMapping { termVar :: String, tyItem :: Ty }
-  | CtxItemHat String
-  | CtxEquality { tyVarHat :: String, tyEqTo :: Ty }
-  | CtxMarker String
+    CtxItem Text
+  | CtxMapping { termVar :: Text, tyItem :: Ty }
+  | CtxItemHat Text
+  | CtxEquality { tyVarHat :: Text, tyEqTo :: Ty }
+  | CtxMarker Text
   deriving (Eq, Show)
 
 type Ctx = [CtxItem]
