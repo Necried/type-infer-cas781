@@ -86,6 +86,10 @@ cOrBody = Lam "p" $ Lam "q" $ Lam "t" $ Lam "f" $
 -- NOTE: Without the annotation, this will not type check!
 cAndTFeqTBody = Ann cAndBody cAndType `App` cTrueBody `App` cFalseBody
 
+-- Let test
+letBody = Let "x" (IntegerTerm 2) (BinOpExpr Plus (Var "x") (IntegerTerm 3))
+letTy = IntegerTy
+
 -- Test harness
 runPassingTests = do
   runTyCheck [] idBody idType
