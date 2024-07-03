@@ -2,6 +2,8 @@
 
 module Check where
 
+import Prelude hiding (LT, GT)
+
 import Control.Monad.Trans.State.Strict
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Error.Class (throwError)
@@ -42,7 +44,8 @@ dotJudgmentGraph ctx e mTy s =
     Right g -> dotToFile s g
 
 freeVars :: Ty -> Set Ty
-freeVars UnitTy               = Set.empty
+freeVars x
+  | x `elem` [UnitTy, BooleanTy, IntegerTy] = Set.empty
 freeVars (TyVar varName)      = Set.singleton (TyVar varName)
 freeVars (TyVarHat varName)   = Set.singleton (TyVarHat varName)
 freeVars (TyArrow tyA tyB)    = Set.union (freeVars tyA) (freeVars tyB)
@@ -68,6 +71,8 @@ tySubst alpha alphaHat (Forall alphaName tyA) = Forall alphaName (tySubst alpha 
 ctxSubst :: Ctx -> Ty -> Ty
 ctxSubst ctx (TyVar alphaName) = TyVar alphaName
 ctxSubst ctx UnitTy = UnitTy
+ctxSubst ctx BooleanTy = BooleanTy
+ctxSubst ctx IntegerTy = IntegerTy
 ctxSubst ctx (TyVarHat alphaName) 
   | any hasEq ctx =
     ctxSubst ctx tau
@@ -89,6 +94,14 @@ subTypeOf ctx tv0@(TyVar alpha0) tv1@(TyVar alpha1) = do
 
 subTypeOf ctx UnitTy UnitTy = do
   createJudgmentTrace (SubtypeTrace "<:Unit" (ctx, UnitTy, UnitTy)) []
+  pure ctx
+
+subTypeOf ctx BooleanTy BooleanTy = do
+  createJudgmentTrace (SubtypeTrace "<:BooleanTy" (ctx, BooleanTy, BooleanTy)) []
+  pure ctx
+
+subTypeOf ctx IntegerTy IntegerTy = do
+  createJudgmentTrace (SubtypeTrace "<:IntegerTy" (ctx, IntegerTy, IntegerTy)) []
   pure ctx
 
 subTypeOf ctx a1@(TyVarHat alpha0) a2@(TyVarHat alpha1) = do
@@ -139,6 +152,8 @@ subTypeOf ctx tyA aHat@(TyVarHat alphaName) = do
   n <- getNode
   createJudgmentTrace (SubtypeTrace "<:InstantiateR" (ctx, tyA, aHat)) [(n, InstR)]
   pure ctxDelta
+
+subTypeOf _ tyA tyB = error $ "No subtype instance of " ++ show tyA ++ " " ++ show tyB
 
 instL :: Ctx -> Ty -> Ty -> TyStateT Ctx
 instL ctx tvHat@(TyVarHat alphaName) tau = do
@@ -236,6 +251,18 @@ tyCheck :: Ctx -> Expr -> Ty -> TyStateT Ctx
 tyCheck ctx UnitTerm UnitTy = do
   createJudgmentTrace (AlgTypingTrace "1I" (ctx, UnitTerm, UnitTy)) []
   return ctx
+tyCheck ctx ifExpr@(If p e1 e2) ty = do
+  _ <- tyCheck ctx p BooleanTy
+  n1 <- getNode
+  _ <- tyCheck ctx e1 ty
+  n2 <- getNode
+  _ <- tyCheck ctx e2 ty
+  n3 <- getNode
+
+  createJudgmentTrace (AlgTypingTrace "If" (ctx, ifExpr, ty))
+    [(n1, TyCheck), (n2, TyCheck), (n3, TyCheck)]
+
+  pure ctx
 tyCheck ctx (Lam x e) (TyArrow tyA tyB) = do
   ctxDeltaXAlphaOmega <- tyCheck ctxExtended e tyB
   let ctxDelta = takeUntilVar (CtxMapping x tyA) ctxDeltaXAlphaOmega
@@ -278,6 +305,46 @@ tyInfer ctx (Var x) = do
 tyInfer ctx UnitTerm = do
   createJudgmentTrace (AlgTypingTrace "1I=>" (ctx, UnitTerm, UnitTy)) []
   pure (UnitTy, ctx)
+tyInfer ctx b@(BooleanTerm _) = do
+  createJudgmentTrace (AlgTypingTrace "BoolI=>" (ctx, b, BooleanTy)) []
+  pure (BooleanTy, ctx)
+tyInfer ctx i@(IntegerTerm _) = do
+  createJudgmentTrace (AlgTypingTrace "IntI=>" (ctx, i, IntegerTy)) []
+  pure (IntegerTy, ctx)
+tyInfer ctx bop@(BinOpExpr op e1 e2) =
+  let
+    tyOp =
+      if op `elem` [Plus, Minus, Mult, Divide]
+      then IntegerTy
+      else error "unimplemented ty op in tyInfer"
+  in do
+    _ <- tyCheck ctx e1 tyOp
+    n1 <- getNode
+    _ <- tyCheck ctx e2 tyOp
+    n2 <- getNode
+
+    createJudgmentTrace
+      (AlgTypingTrace "BinOpExpr" (ctx, bop, tyOp)) [(n1, TyCheck), (n2, TyCheck)]
+    pure (tyOp, ctx)
+tyInfer ctx predOp@(PredOpExpr op e1 e2) =
+  let
+    tyOp =
+      if op `elem` [LT, GT, LTE, GTE]
+      then IntegerTy
+      -- TODO: Make Eq polymorphic
+      else if op `elem` [And, Or, Eq]
+      then BooleanTy
+      else error "unimplemented ty op in tyInfer for PredOp"
+  in do
+    _ <- tyCheck ctx e1 tyOp
+    n1 <- getNode
+    _ <- tyCheck ctx e2 tyOp
+    n2 <- getNode
+
+    createJudgmentTrace
+      (AlgTypingTrace "PredOp" (ctx, predOp, BooleanTy)) []
+    pure (BooleanTy, ctx)
+
 tyInfer ctx (Ann e ty) = do
   ctx' <- tyCheck ctx e ty
   n <- getNode
@@ -304,6 +371,16 @@ tyInfer ctx (App e1 e2) = do
   (tyC, ctxDelta) <- tyAppInfer ctxOmega (ctxSubst ctxOmega tyA) e2
   n2 <- getNode
   createJudgmentTrace (AlgTypingTrace "->E" (ctx, App e1 e2, tyC))
+    [(n1, TyInfer), (n2, TyAppInfer)]
+  pure (tyC, ctxDelta)
+tyInfer ctx letExpr@(Let x e1 e2) = do
+  -- tyCheck ctx (App (Lam x e2) e1) tyC
+  (tyA, ctxOmega) <- tyInfer ctx (Lam x e2)
+  n1 <- getNode
+  (tyC, ctxDelta) <- tyAppInfer ctxOmega (ctxSubst ctxOmega tyA) e1
+  n2 <- getNode
+
+  createJudgmentTrace (AlgTypingTrace "Let" (ctx, letExpr, tyC))
     [(n1, TyInfer), (n2, TyAppInfer)]
   pure (tyC, ctxDelta)
 

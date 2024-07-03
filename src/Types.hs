@@ -91,18 +91,43 @@ createJudgmentTrace srcLabel ((tgtNode, edgeLabel):rest) = do
 data Expr =
     Var Text
   | UnitTerm
+  | BooleanTerm Bool
+  | IntegerTerm Int
+  | BinOpExpr Op Expr Expr
+  | PredOpExpr PredOp Expr Expr
+  | If Expr {-condition-} Expr {-then-} Expr {-else-}
+  | Let Text Expr Expr -- let x = e in e'
   | Lam Text Expr
   | App Expr Expr
   | Ann Expr Ty
   deriving (Eq, Show)
 
+data Op
+  = Plus
+  | Minus
+  | Mult
+  | Divide
+  deriving (Eq, Show)
+
+data PredOp
+  = LT
+  | GT
+  | LTE
+  | GTE
+  | Eq
+  | And
+  | Or
+  deriving (Eq, Show)
+
 type Name = Text
 
-data Decl = 
+data Decl =
   Decl Name Expr (Maybe Ty)
 
 data Ty =
     UnitTy
+  | BooleanTy
+  | IntegerTy
   | TyVar Text
   | TyVarHat Text
   | TyArrow Ty Ty
