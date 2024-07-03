@@ -28,6 +28,7 @@ dependencies:
 - parsec
 - text
 - fgl
+- prettyprinter
 
 ghc-options:
 - -Wall

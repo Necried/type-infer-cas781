@@ -3,10 +3,13 @@
 module Dot where
 
 import qualified Data.Graph.Inductive as FGL
+import Prettyprinter.Render.String
+import Prettyprinter
 
 import Utils.Dot
 
 import Types
+import Pretty
 
 fglToDotGeneric ::
      (FGL.Graph gr, Show b)
@@ -24,8 +27,10 @@ fglToDotGeneric gr nodeConv edgeConv attrNodesConv attrEdgesConv = do
 
 graphToDot :: FGL.Graph gr => gr JudgmentTrace FunctionCall -> Dot ()
 graphToDot cfg = fglToDotGeneric cfg (const "") show
-  (\_ p -> [("label", show p)])
+  (\_ p -> [("label", renderTrace p)])
   (const [])
+  where
+    renderTrace = renderString . layoutPretty defaultLayoutOptions . pretty
 
 dotToFile :: FGL.Graph gr => String -> gr JudgmentTrace FunctionCall -> IO ()
 dotToFile s =
