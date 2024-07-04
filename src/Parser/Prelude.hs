@@ -40,9 +40,28 @@ data RawToken
     | ArrowA
     | ForallA
     | UnitA
+    | IfA
+    | ThenA
+    | ElseA
+    | LetA
+    | InA
+    | PlusA
+    | MinusA
+    | TimesA
+    | DivideA
+    | LTA
+    | LTEA
+    | GTA
+    | GTEA
+    | EqRA
+    | AndA
+    | OrA
     | UpperNameA Name
     | LowerNameA Name
     | Comment Text
+    | IntegerA Int
+    | DoubleA Double
+    | BooleanA Bool
     | LambdaA
     | BlockEndA         --end of a "block", happens when there is a new definition
     | OtherA Text

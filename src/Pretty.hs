@@ -2,6 +2,8 @@
 
 module Pretty where
 
+import Prelude hiding(LT,LTE,GT,GTE)
+
 import Data.List
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc
@@ -28,6 +30,8 @@ instance Pretty Expr where
     pretty (If p e1 e2) = "if" <+> pretty p <+> "then" <+> pretty e1 <+> pretty e2
     pretty (BinOpExpr binOp e1 e2) =
       pretty e1 <+> pretty binOp <+> pretty e2
+    pretty (PredOpExpr predOp e1 e2) =
+      pretty e1 <+> pretty predOp <+> pretty e2
     pretty (Let x e1 e2) =
       align $ vsep
         [ "let"
@@ -44,6 +48,15 @@ instance Pretty Op where
   pretty Minus = "-"
   pretty Mult = "*"
   pretty Divide = "/"
+
+instance Pretty PredOp where
+  pretty LT = "<"
+  pretty LTE = "<="
+  pretty GT = ">"
+  pretty GTE = ">="
+  pretty Eq = "=="
+  pretty And = "&&"
+  pretty Or = "||"
 
 instance Pretty Ty where
     pretty UnitTy = "()"

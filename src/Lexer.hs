@@ -3,6 +3,7 @@
 module Lexer where
 
 import Data.Text (Text)
+import Text.Read (readMaybe)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as TIO
 import Text.Parsec
@@ -41,7 +42,6 @@ lexToken = do
             try lexComment,
             try lexTypeA,
             try lexAliasA,
-            try lexEqA,
             try lexPipeA,
             try lexUnitA,
             try lexLBrackA,
@@ -55,6 +55,17 @@ lexToken = do
             try lexUnderscoreA,
             try lexArrowA,
             try lexForallA,
+            try lexDoubleA,
+            try lexIntegerA,
+            try lexBooleanA,
+            try lexIfA,
+            try lexThenA,
+            try lexElseA,
+            try lexLetA,
+            try lexInA,
+            try lexBinOpA,
+            try lexPredOpA,
+            try lexEqA,
             try lexLambdaA,
             try lexUpperNameA,
             try lexLowerNameA,
@@ -141,6 +152,140 @@ lexForallA = do
     string "forall"
     return ForallA
 
+lexDoubleA :: Lexer RawToken
+lexDoubleA = do
+    digits <- many digit
+    char '.'
+    decimals <- many digit
+    let mDub = readMaybe $ digits ++ ['.'] ++ decimals
+    
+    case mDub of
+        Just d -> 
+            return $ DoubleA d
+        Nothing ->
+            fail "Expected an double"
+
+lexIntegerA :: Lexer RawToken
+lexIntegerA = do
+    digits <- many digit
+    let mInt = readMaybe digits
+    
+    case mInt of
+        Just i -> 
+            return $ IntegerA i
+        Nothing ->
+            fail "Expected an integer"
+
+lexBooleanA :: Lexer RawToken
+lexBooleanA = choice
+    [
+        string "True"  >> pure (BooleanA True)
+    ,   string "False" >> pure (BooleanA False)
+    ]
+
+lexIfA :: Lexer RawToken
+lexIfA = do
+    string "if"
+    return IfA
+
+lexThenA :: Lexer RawToken
+lexThenA = do
+    string "then"
+    return ThenA
+
+lexElseA :: Lexer RawToken
+lexElseA = do
+    string "else"
+    return ElseA
+
+lexLetA :: Lexer RawToken
+lexLetA = do
+    string "let"
+    return LetA
+
+lexInA :: Lexer RawToken
+lexInA = do
+    string "in"
+    return InA
+
+lexBinOpA :: Lexer RawToken
+lexBinOpA = 
+    choice
+        [
+            lexPlusA
+        ,   lexMinusA
+        ,   lexTimesA
+        ,   lexDivideA
+        ]
+
+lexPlusA :: Lexer RawToken
+lexPlusA = do
+    string "+"
+    return PlusA
+
+lexMinusA :: Lexer RawToken
+lexMinusA = do
+    string "-"
+    return MinusA
+
+lexTimesA :: Lexer RawToken
+lexTimesA = do
+    string "*"
+    return TimesA
+
+lexDivideA :: Lexer RawToken
+lexDivideA = do
+    string "/"
+    return DivideA
+
+lexPredOpA :: Lexer RawToken
+lexPredOpA = 
+    choice
+        [
+            lexLTA
+        ,   lexLTEA
+        ,   lexGTA
+        ,   lexGTEA
+        ,   lexEqRA
+        ,   lexAndA
+        ,   lexOrA
+        ]
+
+lexLTA :: Lexer RawToken
+lexLTA = do
+    string "<"
+    return LTA
+
+lexLTEA :: Lexer RawToken
+lexLTEA = do
+    string "<="
+    return LTEA
+
+lexGTA :: Lexer RawToken
+lexGTA = do
+    string ">"
+    return GTA
+
+lexGTEA :: Lexer RawToken
+lexGTEA = do
+    string ">="
+    return GTEA
+
+lexEqRA :: Lexer RawToken
+lexEqRA = do
+    string "=="
+    return EqRA
+
+lexAndA :: Lexer RawToken
+lexAndA = do
+    string "&&"
+    return AndA
+
+lexOrA :: Lexer RawToken
+lexOrA = do
+    string "||"
+    return OrA
+
 lexUnitA :: Lexer RawToken
 lexUnitA = do
     string "()"
@@ -217,6 +362,14 @@ runLex text =
 runTest :: Text -> IO ()
 runTest text = do
     let result = runParser lexMain () "" text
+    case result of
+        Left err -> print err
+        Right val -> print val
+    pure ()
+
+runTestGeneric :: Lexer RawToken -> Text -> IO ()
+runTestGeneric lexer text = do
+    let result = runParser lexer () "" text
     case result of
         Left err -> print err
         Right val -> print val
