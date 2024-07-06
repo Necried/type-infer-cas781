@@ -82,6 +82,8 @@ eval env e@(If p e1 e2) = case eval env p of
   (BooleanValue True) -> eval env e1
   (BooleanValue False) -> eval env e2
   _ -> error $ "eval: if expression: " ++ show e
+eval env (Let x e1 e2) =
+  eval env (App (Lam x e2) e1)
 eval env (Var x) =
   case M.lookup x env of
     Nothing -> error $ "eval: variable " ++ show x ++ " not in scope"
