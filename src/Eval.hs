@@ -4,7 +4,7 @@ module Eval where
 
 import Types
 
-import Data.Map.Strict (Map)
+import Data.Map.Strict as Map (Map, empty)
 import qualified Data.Map.Strict as M
 import Data.Text (Text)
 
@@ -41,6 +41,9 @@ instance Show Value where
   show (NValue nv) = show nv
  
 type Env = Map Text Value
+
+empty :: Env
+empty = Map.empty
 
 eval :: Env -> Expr -> Value
 eval env UnitTerm = UnitValue

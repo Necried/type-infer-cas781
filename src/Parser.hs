@@ -30,6 +30,14 @@ declarations = do
         modifyState (\(ParserState map) -> ParserState $ Map.insert n (e, mT) map)
     run <$> getState
 
+exprOrDecl :: Parser (Either Expr (Name, Expr, Maybe Ty))
+exprOrDecl =
+    choice
+        [
+            try $ Right <$> declaration
+        ,   Left <$> expr
+        ]
+
 declaration :: Parser (Name, Expr, Maybe Ty)
 declaration = do
     mNT <- optionMaybe $ try $ do
@@ -254,9 +262,29 @@ runParse :: [Token] -> Either ParseError DeclMap
 runParse tokens =
     runParser declarations (ParserState Map.empty) "" tokens
 
+runLexParseExpr :: Text -> Either ParseError Expr
+runLexParseExpr text = do 
+    let lexResult = runLex text
+    case lexResult of
+        Left err -> Left err
+        Right tokens ->
+            runExprParse tokens
+
+runLexParse :: Text -> Either ParseError (Either Expr (Name, Expr, Maybe Ty))
+runLexParse text = do 
+    let lexResult = runLex text
+    case lexResult of
+        Left err -> Left err
+        Right tokens ->
+            runExprOrDeclParse tokens
+
 runExprParse :: [Token] -> Either ParseError Expr
 runExprParse tokens =
     runParser expr (ParserState Map.empty) "" tokens
+
+runExprOrDeclParse :: [Token] -> Either ParseError (Either Expr (Name, Expr, Maybe Ty))
+runExprOrDeclParse tokens =
+    runParser exprOrDecl (ParserState Map.empty) "" tokens
 
 runExprTest :: Text -> IO ()
 runExprTest text = do
