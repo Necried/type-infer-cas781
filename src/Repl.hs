@@ -8,34 +8,45 @@ import Lexer
 import qualified Data.Text as Text
 import Data.List (intercalate)
 import Types
+import Utils ((<:))
 
 import qualified Data.Map.Strict as Map
 import Data.Map.Strict (Map)
 
-type ExprEnv = Map Name (Value, Expr)
+type ExprEnv = [(Name, (Value, Expr))]
+
+data ReplState = 
+    ReplState { env :: ExprEnv }
+
+initState = ReplState []
 
 main :: IO ()
-main = runInputT defaultSettings (loop Map.empty)
+main = runInputT defaultSettings (loop initState)
     where
-        loop :: ExprEnv -> InputT IO ()
-        loop env = do
+        loop :: ReplState -> InputT IO ()
+        loop state = do
+            let 
+                ins :: Expr -> Expr
+                ins expr = 
+                    foldr (\(name,(_, expr)) e -> Let name expr e) expr (env state)
             minput <- getInputLine "λ "
             newEnv <- case minput of
-                Nothing -> pure env
-                Just ":q" -> pure env
+                Nothing -> pure state
+                Just ":q" -> pure state
                 Just (':':'t':rest) -> 
                     let 
                         txt = Text.pack rest
                     in do
                         case runLexParseExpr txt of
-                            Right expr ->
-                                case runTyInfer [] expr of
+                            Right expr -> do
+                                outputStrLn $ show (ins expr)
+                                case runTyInfer [] (ins expr) of
                                     Right (ty, ctx) ->
                                         outputStrLn $ show ty
                                     Left err -> outputStrLn $ Text.unpack err
                             Left err ->
                                 outputStrLn $ show err
-                        pure env
+                        pure state
                 Just (':':'l':rest) -> 
                     let 
                         txt = Text.pack rest
@@ -46,28 +57,36 @@ main = runInputT defaultSettings (loop Map.empty)
                                     showToks tokens
                             Left err ->
                                 outputStrLn $ show err
-                        pure env
+                        pure state
                 Just str ->
                     let 
                         txt = Text.pack str
                     in
                         case runLexParse txt of
                             Right (Left expr) -> do
-                                outputStrLn $ show $ eval (toEnv env) expr
-                                pure env
+                                outputStrLn $ show $ eval (toEnv $ env state) (ins expr)
+                                pure state
                             Right (Right (name, expr, _)) ->
-                                let
-                                    val = eval (toEnv env) expr
-                                in do
-                                    outputStrLn $ show val
-                                    pure $ Map.insert name (val, expr) env
+                                case runTyInfer [] (ins expr) of
+                                    Right (ty, ctx) -> 
+                                        let
+                                            val = eval (toEnv $ env state) (ins expr)
+                                        in do
+                                            outputStrLn $ show ctx
+                                            outputStrLn $ show val
+                                            pure $ state 
+                                                { env = env state ++ [(name, (val, expr))]
+                                                }
+                                    Left err -> do
+                                        outputStrLn $ Text.unpack err
+                                        pure state
                             Left err -> do
                                 outputStrLn $ show err
-                                pure env
+                                pure state
             loop newEnv
         
         toEnv :: ExprEnv -> Env
-        toEnv = Map.map fst
+        toEnv = Map.map fst . Map.fromList
 
         showToks =
             intercalate ", " .
