@@ -25,13 +25,13 @@ fglToDotGeneric gr nodeConv edgeConv attrNodesConv attrEdgesConv = do
   mapM_ (\(n,p) -> userNode (userNodeId n) (attrNodesConv n p)) ns
   mapM_ (\(a,b,p) -> edge (userNodeId a) (userNodeId b) (attrEdgesConv p ++ [("label", edgeConv p)])) es
 
-graphToDot :: FGL.Graph gr => gr JudgmentTrace FunctionCall -> Dot ()
+graphToDot :: FGL.Graph gr => gr JudgmentTrace JudgmentRule -> Dot ()
 graphToDot cfg = fglToDotGeneric cfg (const "") show
   (\_ p -> [("label", renderTrace p)])
   (const [])
   where
     renderTrace = renderString . layoutPretty defaultLayoutOptions . pretty
 
-dotToFile :: FGL.Graph gr => String -> gr JudgmentTrace FunctionCall -> IO ()
+dotToFile :: FGL.Graph gr => String -> gr JudgmentTrace JudgmentRule -> IO ()
 dotToFile s =
   writeFile (s <> "_callgraph.dot") . showDot . graphToDot

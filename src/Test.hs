@@ -7,6 +7,7 @@ import Types
 import Check
 import Eval
 import Dot
+import BuildGraph
 
 import qualified Data.Map.Strict as M
 
