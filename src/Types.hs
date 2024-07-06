@@ -18,7 +18,9 @@ type TyStateT metadata a = StateT metadata (Either Text) a
 type RuleName = Text
 
 data JudgmentTrace =
-    AlgTypingTrace (Ctx, Expr, Ty)
+    TyCheckTrace (Ctx, Expr, Ty)
+  | TyInferTrace (Ctx, Expr)
+  | TyAppInferTrace (Ctx, Ty, Expr)
   | SubtypeTrace (Ctx, Ty, Ty)
   | InstLTrace (Ctx, Ty, Ty)
   | InstRTrace (Ctx, Ty, Ty)
@@ -42,16 +44,16 @@ data GBuilder = GBuilder
   , edges :: [G.LEdge JudgmentRule]
   , traceStack :: [G.LNode JudgmentTrace]
   , nodeStack :: [Int]
-  }
+  } deriving Show
 
 data MetaData = MetaData
   { varCounter :: Int
-  }
+  } deriving Show
 
 data MetaDataGBuilder = MetaDataGBuilder
   { judgmentBuilder :: GBuilder
   , metaData :: MetaData
-  }
+  } deriving Show
 
 initMetaData :: MetaData
 initMetaData = MetaData 0
@@ -123,8 +125,8 @@ class TyJudge metadata where
   completedRuleWithTyRet ::
     JudgmentRule -> (Ty, Ctx) -> TyStateT metadata (Ty, Ctx)
   getNewVar :: Text -> TyStateT metadata Text
-  subTypeOfJudge :: Ctx -> Ty -> Ty -> TyStateT metadata Ctx
-  instLJudge, instRJudge :: Ctx -> Ty -> Ty -> TyStateT metadata Ctx
-  tyCheckJudge :: Ctx -> Expr -> Ty -> TyStateT metadata Ctx
-  tyInferJudge :: Ctx -> Expr -> TyStateT metadata (Ty, Ctx)
-  tyAppInferJudge :: Ctx -> Ty -> Expr -> TyStateT metadata (Ty, Ctx)
+  subTypeOf :: Ctx -> Ty -> Ty -> TyStateT metadata Ctx
+  instL, instR :: Ctx -> Ty -> Ty -> TyStateT metadata Ctx
+  tyCheck :: Ctx -> Expr -> Ty -> TyStateT metadata Ctx
+  tyInfer :: Ctx -> Expr -> TyStateT metadata (Ty, Ctx)
+  tyAppInfer :: Ctx -> Ty -> Expr -> TyStateT metadata (Ty, Ctx)

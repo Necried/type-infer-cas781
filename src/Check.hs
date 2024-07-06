@@ -75,53 +75,53 @@ instance TyJudge MetaData where
     v <- gets varCounter
     modify $ \s -> s { varCounter = v + 1 }
     return $ Text.concat [varName, Text.pack $ show v]
-  subTypeOfJudge = subTypeOf
-  instLJudge = instL
-  instRJudge = instR
-  tyCheckJudge = tyCheck
-  tyInferJudge = tyInfer
-  tyAppInferJudge = tyAppInfer
+  subTypeOf = subTypeOf'
+  instL = instL'
+  instR = instR'
+  tyCheck = tyCheck'
+  tyInfer = tyInfer'
+  tyAppInfer = tyAppInfer'
 
-subTypeOf :: TyJudge metadata => Ctx -> Ty -> Ty -> TyStateT metadata Ctx
-subTypeOf ctx tv0@(TyVar alpha0) tv1@(TyVar alpha1) = do
+subTypeOf' :: TyJudge metadata => Ctx -> Ty -> Ty -> TyStateT metadata Ctx
+subTypeOf' ctx tv0@(TyVar alpha0) tv1@(TyVar alpha1) = do
   -- throw error if they're not the same
   unless (alpha0 == alpha1) $ 
     throwError  $ Text.concat ["Type variable ", alpha0, " does not equal ", alpha1]
   completedRule (SubtypeOf "<:Var") ctx
 
-subTypeOf ctx UnitTy UnitTy = do
+subTypeOf' ctx UnitTy UnitTy = do
   completedRule (SubtypeOf "<:Unit") ctx
 
-subTypeOf ctx BooleanTy BooleanTy = do
+subTypeOf' ctx BooleanTy BooleanTy = do
   completedRule (SubtypeOf "<:BooleanTy") ctx
 
-subTypeOf ctx IntegerTy IntegerTy = do
+subTypeOf' ctx IntegerTy IntegerTy = do
   completedRule (SubtypeOf "<:IntegerTy") ctx
 
-subTypeOf ctx a1@(TyVarHat alpha0) a2@(TyVarHat alpha1) = do
+subTypeOf' ctx a1@(TyVarHat alpha0) a2@(TyVarHat alpha1) = do
   -- throw error if they're not the same
   unless (alpha0 == alpha1) $ 
     throwError $ Text.concat ["Type variable ", alpha0, "Hat does not equal ", alpha1, "Hat", " with context: ", Text.pack $ show ctx]
   completedRule (SubtypeOf "<:Exvar") ctx
 
-subTypeOf ctx a1@(TyArrow tyA1 tyA2) a2@(TyArrow tyB1 tyB2) = do
+subTypeOf' ctx a1@(TyArrow tyA1 tyA2) a2@(TyArrow tyB1 tyB2) = do
   ctxOmega <- subTypeOf ctx tyB1 tyA1
   ctxDelta <- subTypeOf ctxOmega (ctxSubst ctxOmega tyA2) (ctxSubst ctxOmega tyB2)
   completedRule (SubtypeOf "<:->") ctxDelta
 
-subTypeOf ctx forTy@(Forall alphaName tyA) tyB = do
+subTypeOf' ctx forTy@(Forall alphaName tyA) tyB = do
   let ctxExtended = ctx <: CtxMarker alphaName <: CtxItemHat alphaName
   ctxDeltaMarkerOmega <- subTypeOf ctxExtended (tySubst (TyVar alphaName) (TyVarHat alphaName) tyA) tyB
   completedRule (SubtypeOf "<:Forall-L") $
     takeUntilVar (CtxMarker alphaName) ctxDeltaMarkerOmega
 
-subTypeOf ctx tyA forTy@(Forall alphaName tyB) = do
+subTypeOf' ctx tyA forTy@(Forall alphaName tyB) = do
   let ctxExtended = ctx <: CtxItem alphaName
   ctxDeltaAlphaOmega <- subTypeOf ctxExtended tyA tyB
   completedRule (SubtypeOf "<:Forall-R") $
     takeUntilVar (CtxItem alphaName) ctxDeltaAlphaOmega
 
-subTypeOf ctx aHat@(TyVarHat alphaName) tyA = do
+subTypeOf' ctx aHat@(TyVarHat alphaName) tyA = do
   when (Set.member (TyVarHat alphaName) $ freeVars tyA) $
     throwError $ Text.concat["Type variable ", alphaName, "Hat exists as a free variable in the given type."]
   unless ((CtxItemHat alphaName) `elem` ctx) $
@@ -129,7 +129,7 @@ subTypeOf ctx aHat@(TyVarHat alphaName) tyA = do
   ctxDelta <- instL ctx (TyVarHat alphaName) tyA
   completedRule (SubtypeOf "<:InstantiateL") ctxDelta
 
-subTypeOf ctx tyA aHat@(TyVarHat alphaName) = do
+subTypeOf' ctx tyA aHat@(TyVarHat alphaName) = do
   when (Set.member (TyVarHat alphaName) $ freeVars tyA) $
     throwError $ Text.concat ["Type variable ", alphaName, "Hat exists as a free variable in the given type."]
   unless ((CtxItemHat alphaName) `elem` ctx) $
@@ -137,10 +137,10 @@ subTypeOf ctx tyA aHat@(TyVarHat alphaName) = do
   ctxDelta <- instR ctx tyA (TyVarHat alphaName)
   completedRule (SubtypeOf "<:InstantiateR") ctxDelta
 
-subTypeOf _ tyA tyB = error $ "No subtype instance of " ++ show tyA ++ " " ++ show tyB
+subTypeOf' _ tyA tyB = error $ "No subtype instance of " ++ show tyA ++ " " ++ show tyB
 
-instL :: TyJudge metadata => Ctx -> Ty -> Ty -> TyStateT metadata Ctx
-instL ctx tvHat@(TyVarHat alphaName) tau = do
+instL' :: TyJudge metadata => Ctx -> Ty -> Ty -> TyStateT metadata Ctx
+instL' ctx tvHat@(TyVarHat alphaName) tau = do
   unless (isMonotype tau) $
     throwError $ Text.concat ["Type ", Text.pack $ show tau, " is not a monotype"]
   unless ((CtxItemHat alphaName) `elem` ctx) $
@@ -148,7 +148,7 @@ instL ctx tvHat@(TyVarHat alphaName) tau = do
   let newItem = CtxEquality alphaName tau
       gammaAlphaTauGamma' = replaceItem (CtxItemHat alphaName) [newItem] ctx
   completedRule (InstL "InstLSolve") gammaAlphaTauGamma'
-instL ctx tvAlpha@(TyVarHat alphaName) tvBeta@(TyVarHat betaName) = do
+instL' ctx tvAlpha@(TyVarHat alphaName) tvBeta@(TyVarHat betaName) = do
   unless ((CtxItemHat alphaName) `elem` ctx) $
     throwError $ Text.concat ["Type variable ", alphaName, "Hat does not exist in the context."]
 
@@ -158,7 +158,7 @@ instL ctx tvAlpha@(TyVarHat alphaName) tvBeta@(TyVarHat betaName) = do
 
   completedRule (InstL "InstLReach") $ ctx |> replaceItem (CtxItemHat betaName) [CtxEquality betaName (TyVarHat alphaName)]
 
-instL ctx tvHat@(TyVarHat alphaName) tArr@(TyArrow tyA1 tyA2) = do
+instL' ctx tvHat@(TyVarHat alphaName) tArr@(TyArrow tyA1 tyA2) = do
   alphaHat1 <- getNewVar alphaName
   alphaHat2 <- getNewVar alphaName
   let alphaArrow = TyArrow (TyVarHat alphaHat1) (TyVarHat alphaHat2)
@@ -167,7 +167,7 @@ instL ctx tvHat@(TyVarHat alphaName) tArr@(TyArrow tyA1 tyA2) = do
   ctxOmega <- instR replacedCtx tyA1 (TyVarHat alphaHat1)
   ctxDelta <- instL ctxOmega (TyVarHat alphaHat2) (ctxSubst ctxOmega tyA2)
   completedRule (InstL "InstLArr") ctxDelta 
-instL ctx tyVarAlphaHat@(TyVarHat alphaName) forTy@(Forall betaName tyB) = do
+instL' ctx tyVarAlphaHat@(TyVarHat alphaName) forTy@(Forall betaName tyB) = do
   unless ((CtxItemHat alphaName) `elem` ctx) $
     throwError $ Text.concat ["Type variable ", alphaName, "Hat does not exist in the context."]
 
@@ -177,8 +177,8 @@ instL ctx tyVarAlphaHat@(TyVarHat alphaName) forTy@(Forall betaName tyB) = do
   let ctxDelta = takeUntilVar (CtxItem betaName) ctxDeltaBetaDelta'
   completedRule (InstL "InstLAIIR") ctxDelta 
 
-instR :: TyJudge metadata => Ctx -> Ty -> Ty -> TyStateT metadata Ctx
-instR ctx tau tvHat@(TyVarHat alphaName) = do
+instR' :: TyJudge metadata => Ctx -> Ty -> Ty -> TyStateT metadata Ctx
+instR' ctx tau tvHat@(TyVarHat alphaName) = do
   unless (isMonotype tau) $
     throwError $ Text.concat ["Type ", Text.pack $ show tau, " is not a monotype"]
   unless ((CtxItemHat alphaName) `elem` ctx) $
@@ -186,7 +186,7 @@ instR ctx tau tvHat@(TyVarHat alphaName) = do
   let newItem = CtxEquality alphaName tau
       gammaAlphaTauGamma' = replaceItem (CtxItemHat alphaName) [newItem] ctx
   completedRule (InstR "InstRSolve") gammaAlphaTauGamma'
-instR ctx tvBeta@(TyVarHat betaName) tvAlpha@(TyVarHat alphaName) = do
+instR' ctx tvBeta@(TyVarHat betaName) tvAlpha@(TyVarHat alphaName) = do
   unless ((CtxItemHat alphaName) `elem` ctx) $
     throwError $ Text.concat ["Type variable ", alphaName, "Hat does not exist in the context."]
 
@@ -195,7 +195,7 @@ instR ctx tvBeta@(TyVarHat betaName) tvAlpha@(TyVarHat alphaName) = do
     throwError $ Text.concat ["Type variable ", betaName, "Hat does not exist after ", alphaName, "Hat in the context."]
 
   completedRule (InstR "InstRReach") $ ctx |> replaceItem (CtxItemHat betaName) [CtxEquality betaName (TyVarHat alphaName)]
-instR ctx tArr@(TyArrow tyA1 tyA2) tvHat@(TyVarHat alphaName) = do
+instR' ctx tArr@(TyArrow tyA1 tyA2) tvHat@(TyVarHat alphaName) = do
   alphaHat1 <- getNewVar alphaName
   alphaHat2 <- getNewVar alphaName
   let alphaArrow = TyArrow (TyVarHat alphaHat1) (TyVarHat alphaHat2)
@@ -204,7 +204,7 @@ instR ctx tArr@(TyArrow tyA1 tyA2) tvHat@(TyVarHat alphaName) = do
   ctxOmega <- instL replacedCtx (TyVarHat alphaHat1) tyA1
   ctxDelta <- instR ctxOmega (ctxSubst ctxOmega tyA2) (TyVarHat alphaHat2) 
   completedRule (InstR "InstRArr")ctxDelta 
-instR ctx forTy@(Forall betaName tyB)  tyVarAlphaHat@(TyVarHat alphaName) = do
+instR' ctx forTy@(Forall betaName tyB)  tyVarAlphaHat@(TyVarHat alphaName) = do
   unless ((CtxItemHat alphaName) `elem` ctx) $
     throwError $ Text.concat ["Type variable ", alphaName, "Hat does not exist in the context."]
 
@@ -218,37 +218,27 @@ instR ctx forTy@(Forall betaName tyB)  tyVarAlphaHat@(TyVarHat alphaName) = do
   completedRule (InstR "InstRAIIL")ctxDelta 
 
 
-tyCheck :: TyJudge metadata => Ctx -> Expr -> Ty -> TyStateT metadata Ctx
-tyCheck ctx UnitTerm UnitTy = do
+tyCheck' :: TyJudge metadata => Ctx -> Expr -> Ty -> TyStateT metadata Ctx
+tyCheck' ctx UnitTerm UnitTy = do
   completedRule (TyCheck "1I") ctx
-tyCheck ctx ifExpr@(If p e1 e2) ty = do
+tyCheck' ctx ifExpr@(If p e1 e2) ty = do
   _ <- tyCheck ctx p BooleanTy
   _ <- tyCheck ctx e1 ty
   _ <- tyCheck ctx e2 ty
 
   completedRule (TyCheck "If") ctx
-tyCheck ctx (Lam x e) (TyArrow tyA tyB) = do
+tyCheck' ctx (Lam x e) (TyArrow tyA tyB) = do
   ctxDeltaXAlphaOmega <- tyCheck ctxExtended e tyB
   let ctxDelta = takeUntilVar (CtxMapping x tyA) ctxDeltaXAlphaOmega
   completedRule (TyCheck "->I") ctxDelta
   where
     ctxExtended = ctx <: CtxMapping x tyA
-tyCheck ctx e (Forall alpha tyA) = do
+tyCheck' ctx e (Forall alpha tyA) = do
   ctxDeltaAlphaOmega <- tyCheck (ctx <: CtxItem alpha) e tyA
   let ctxDelta = takeUntilVar (CtxItem alpha) ctxDeltaAlphaOmega
   completedRule (TyCheck "Forall-I") ctxDelta
-tyCheck ctx (Let x e1 e2) tyC = do
-  -- tyCheck ctx (App (Lam x e2) e1) tyC
-  -- (tyA, ctxOmega) <- tyInfer ctx (Lam x e2)
-  -- (tyC, ctxDelta) <- tyAppInfer ctxOmega (ctxSubst ctxOmega tyA) e1
-  (tyA, ctxOmega) <- tyInfer ctx e1
-  let
-    e1TyMapping = CtxMapping x tyA
-    ctxExtended = ctxOmega <: e1TyMapping
-  ctxDelta <- tyCheck ctxExtended e2 tyC
   
-  completedRule (TyInfer "Let=>") ctxDelta
-tyCheck ctx e tyB = do
+tyCheck' ctx e tyB = do
   (tyA, ctxTheta) <- tyInfer ctx e
 
   ctxDelta <- ctxSubst ctxTheta tyA `subTypeOfCtx` ctxSubst ctxTheta tyB
@@ -257,8 +247,8 @@ tyCheck ctx e tyB = do
   where
     subTypeOfCtx = subTypeOf ctx
 
-tyInfer :: TyJudge metadata => Ctx -> Expr -> TyStateT metadata (Ty, Ctx)
-tyInfer ctx (Var x) = do
+tyInfer' :: TyJudge metadata => Ctx -> Expr -> TyStateT metadata (Ty, Ctx)
+tyInfer' ctx (Var x) = do
   varFromCtx <- lift $ lookupVar lookupPred ctx errMsg
   completedRuleWithTyRet (TyInfer "Var") (tyItem varFromCtx, ctx)
   where
@@ -269,13 +259,13 @@ tyInfer ctx (Var x) = do
     lookupPred _ = False
 
     errMsg = Text.concat ["Error in tyInfer for Var: variable ", Text.pack $ show x, " not in scope"]
-tyInfer ctx UnitTerm = do
+tyInfer' ctx UnitTerm = do
   completedRuleWithTyRet (TyInfer "1I=>") (UnitTy, ctx)
-tyInfer ctx (BooleanTerm _) = do
+tyInfer' ctx (BooleanTerm _) = do
   completedRuleWithTyRet (TyInfer "BoolI=>") (BooleanTy, ctx)
-tyInfer ctx (IntegerTerm _) = do
+tyInfer' ctx (IntegerTerm _) = do
   completedRuleWithTyRet (TyInfer "IntI=>") (IntegerTy, ctx)
-tyInfer ctx (BinOpExpr op e1 e2) =
+tyInfer' ctx (BinOpExpr op e1 e2) =
   let
     tyOp =
       if op `elem` [Plus, Minus, Mult, Divide]
@@ -286,7 +276,7 @@ tyInfer ctx (BinOpExpr op e1 e2) =
     _ <- tyCheck ctx e2 tyOp
 
     completedRuleWithTyRet (TyInfer "BinOpExpr=>") (tyOp, ctx)
-tyInfer ctx (PredOpExpr op e1 e2) =
+tyInfer' ctx (PredOpExpr op e1 e2) =
   let
     tyOp =
       if op `elem` [LT, GT, LTE, GTE]
@@ -300,11 +290,21 @@ tyInfer ctx (PredOpExpr op e1 e2) =
     _ <- tyCheck ctx e2 tyOp
 
     completedRuleWithTyRet (TyInfer "PredOp=>") (BooleanTy, ctx)
+tyInfer' ctx (Let x e1 e2) = do
+  -- tyCheck ctx (App (Lam x e2) e1) tyC
+  -- (tyA, ctxOmega) <- tyInfer ctx (Lam x e2)
+  -- (tyC, ctxDelta) <- tyAppInfer' ctxOmega (ctxSubst ctxOmega tyA) e1
+  (tyA, ctxOmega) <- tyInfer ctx e1
+  let
+    e1TyMapping = CtxMapping x tyA
+    ctxExtended = ctxOmega <: e1TyMapping
+  (tyC, ctxDelta) <- tyInfer ctxExtended e2
+  completedRuleWithTyRet (TyInfer "Let=>") (tyC, ctxDelta)
 
-tyInfer ctx (Ann e ty) = do
+tyInfer' ctx (Ann e ty) = do
   ctx' <- tyCheck ctx e ty
   completedRuleWithTyRet (TyInfer "Anno") (ty, ctx')
-tyInfer ctx (Lam x e) = do
+tyInfer' ctx (Lam x e) = do
   alphaHat <- getNewVar "alpha"
   betaHat <- getNewVar "beta"
   let
@@ -317,13 +317,13 @@ tyInfer ctx (Lam x e) = do
   ctxDeltaXAlphaHatOmega <- tyCheck ctxExtended e betaHatTyVar
   let ctxDelta = takeUntilVar xTyAlphaHatItem ctxDeltaXAlphaHatOmega
   completedRuleWithTyRet (TyInfer "->I=>") (TyArrow alphaHatTyVar betaHatTyVar, ctxDelta)
-tyInfer ctx (App e1 e2) = do
+tyInfer' ctx (App e1 e2) = do
   (tyA, ctxOmega) <- tyInfer ctx e1
   (tyC, ctxDelta) <- tyAppInfer ctxOmega (ctxSubst ctxOmega tyA) e2
   completedRuleWithTyRet (TyInfer "->E") (tyC, ctxDelta)
 
-tyAppInfer :: TyJudge metadata => Ctx -> Ty -> Expr -> TyStateT metadata (Ty, Ctx)
-tyAppInfer ctx (Forall alphaName tyA) e = do
+tyAppInfer' :: TyJudge metadata => Ctx -> Ty -> Expr -> TyStateT metadata (Ty, Ctx)
+tyAppInfer' ctx (Forall alphaName tyA) e = do
   ret <- tyAppInfer ctxExtended (tySubst alpha alphaHat tyA) e
   completedRuleWithTyRet (TyAppInfer "Forall-App") ret
   where
@@ -331,10 +331,10 @@ tyAppInfer ctx (Forall alphaName tyA) e = do
     alphaHat = TyVarHat alphaName
     itemAlphaHat = CtxItemHat alphaName
     ctxExtended = ctx <: itemAlphaHat
-tyAppInfer ctx (TyArrow tyA tyC) e = do
+tyAppInfer' ctx (TyArrow tyA tyC) e = do
   ctxDelta <- tyCheck ctx e tyA
   completedRuleWithTyRet (TyAppInfer "->App") (tyC, ctxDelta)
-tyAppInfer ctx (TyVarHat alphaName) e = do
+tyAppInfer' ctx (TyVarHat alphaName) e = do
   alphaHat1 <- getNewVar alphaName
   alphaHat2 <- getNewVar alphaName
   let alphaArrow = TyArrow (TyVarHat alphaHat1) (TyVarHat alphaHat2)
