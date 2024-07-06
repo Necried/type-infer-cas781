@@ -47,9 +47,6 @@ instance Show Value where
 
 type Env = Map Text Value
 
-empty :: Env
-empty = Map.empty
-
 eval :: Env -> Expr -> Value
 eval _ UnitTerm = UnitValue
 eval _ (BooleanTerm b) = BooleanValue b
