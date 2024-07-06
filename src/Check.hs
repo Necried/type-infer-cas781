@@ -107,7 +107,7 @@ subTypeOf ctx IntegerTy IntegerTy = do
 subTypeOf ctx a1@(TyVarHat alpha0) a2@(TyVarHat alpha1) = do
   -- throw error if they're not the same
   unless (alpha0 == alpha1) $ 
-    throwError $ Text.concat ["Type variable ", alpha0, "Hat does not equal ", alpha1, "Hat"]
+    throwError $ Text.concat ["Type variable ", alpha0, "Hat does not equal ", alpha1, "Hat", " with context ", Text.pack (show ctx) ]
   createJudgmentTrace (SubtypeTrace "<:Exvar" (ctx, a1, a2)) []
   pure ctx
 
@@ -375,9 +375,10 @@ tyInfer ctx (App e1 e2) = do
   pure (tyC, ctxDelta)
 tyInfer ctx letExpr@(Let x e1 e2) = do
   -- tyCheck ctx (App (Lam x e2) e1) tyC
-  (tyA, ctxOmega) <- tyInfer ctx (Lam x e2)
+  (tyA, ctxOmega) <- tyInfer ctx e1
+  let ctxExtended = ctxOmega <: (CtxMapping "x" tyA)
   n1 <- getNode
-  (tyC, ctxDelta) <- tyAppInfer ctxOmega (ctxSubst ctxOmega tyA) e1
+  (tyC, ctxDelta) <- tyInfer ctxExtended e2
   n2 <- getNode
 
   createJudgmentTrace (AlgTypingTrace "Let" (ctx, letExpr, tyC))
