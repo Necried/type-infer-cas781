@@ -376,7 +376,7 @@ tyInfer ctx (App e1 e2) = do
 tyInfer ctx letExpr@(Let x e1 e2) = do
   -- tyCheck ctx (App (Lam x e2) e1) tyC
   (tyA, ctxOmega) <- tyInfer ctx e1
-  let ctxExtended = ctxOmega <: (CtxMapping "x" tyA)
+  let ctxExtended = ctxOmega <: (CtxMapping x tyA)
   n1 <- getNode
   (tyC, ctxDelta) <- tyInfer ctxExtended e2
   n2 <- getNode
