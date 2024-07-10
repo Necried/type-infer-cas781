@@ -88,11 +88,11 @@ cOrBody = Lam "p" $ Lam "q" $ Lam "t" $ Lam "f" $
 cAndTFeqTBody = Ann cAndBody cAndType `App` cTrueBody `App` cFalseBody
 
 -- Let test
-letBody = Let "x" (IntegerTerm 2) (BinOpExpr Plus (Var "x") (IntegerTerm 3))
+letBody = Let (VarPat "x") (LiteralExpr $ IntegerTerm 2) (BinOpExpr Plus (Var "x") (LiteralExpr $ IntegerTerm 3))
 letTy = IntegerTy
 
 -- Tuple test
-tupleBody = Tuple [IntegerTerm 2, BooleanTerm True, Ann idBody idType]
+tupleBody = Tuple [LiteralExpr $ IntegerTerm 2, LiteralExpr (BooleanTerm True), Ann idBody idType]
 runTupleTest = runTyInfer [] tupleBody 
 
 -- Test harness
@@ -128,9 +128,9 @@ infixl 9 |@| -- 9 is the maximum precedence
 (|@|) :: Expr -> Expr -> Expr
 (|@|) = App
 
-appId = idBody |@| UnitTerm
-appFlipPartial = flipBody |@| constBody |@| UnitTerm
-appFlip = appFlipPartial |@| UnitTerm 
+appId = idBody |@| LiteralExpr UnitTerm
+appFlipPartial = flipBody |@| constBody |@| LiteralExpr UnitTerm
+appFlip = appFlipPartial |@| LiteralExpr UnitTerm 
 
 evalTests = mapM (print . eval M.empty)
   [ appId

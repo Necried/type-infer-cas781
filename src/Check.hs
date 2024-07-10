@@ -235,7 +235,7 @@ instR' ctx forTy@(Forall betaName tyB)  tyVarAlphaHat@(TyVarHat alphaName) = do
 
 
 tyCheck' :: TyJudge metadata => Ctx -> Expr -> Ty -> TyStateT metadata Ctx
-tyCheck' ctx UnitTerm UnitTy = do
+tyCheck' ctx (LiteralExpr UnitTerm) UnitTy = do
   completedRule (TyCheck "1I") ctx
 tyCheck' ctx ifExpr@(If p e1 e2) ty = do
   _ <- tyCheck ctx p BooleanTy
@@ -275,11 +275,11 @@ tyInfer' ctx (Var x) = do
     lookupPred _ = False
 
     errMsg = Text.concat ["Error in tyInfer for Var: variable ", Text.pack $ show x, " not in scope"]
-tyInfer' ctx UnitTerm = do
+tyInfer' ctx (LiteralExpr UnitTerm) = do
   completedRuleWithTyRet (TyInfer "1I=>") (UnitTy, ctx)
-tyInfer' ctx (BooleanTerm _) = do
+tyInfer' ctx (LiteralExpr (BooleanTerm _)) = do
   completedRuleWithTyRet (TyInfer "BoolI=>") (BooleanTy, ctx)
-tyInfer' ctx (IntegerTerm _) = do
+tyInfer' ctx (LiteralExpr (IntegerTerm _)) = do
   completedRuleWithTyRet (TyInfer "IntI=>") (IntegerTy, ctx)
 tyInfer' ctx (Tuple exprs) = do
   retTyCtxList <- mapM (tyInfer ctx) exprs -- [TyStateT metadata (Ty, Ctx)] -- TyStateT metadata [(Ty, Ctx)]
@@ -326,14 +326,17 @@ tyInfer' ctx (Let (VarPat x) e1 e2) = do
   completedRuleWithTyRet (TyInfer "Let=>") (tyCSpecialize, ctxDelta)
 
 tyInfer' ctx (Let (TuplePat pats) e1@(Tuple exprs) e2) = do
-  (TupleTy tyExprs, ctxOmega) <- tyInfer ctx e1
-  let
-    e1TyMapping = concat $ zipWith assocPat pats tyExprs
-    ctxExtended = ctxOmega ++ e1TyMapping
-  (tyC, ctxDelta) <- tyInfer ctxExtended e2
-  -- We need to substitute over the polymorphic return variable here
-  let tyCSpecialize = ctxSubst ctxDelta tyC
-  completedRuleWithTyRet (TyInfer "Let=>") (tyCSpecialize, ctxDelta)
+  (tye1, ctxOmega) <- tyInfer ctx e1
+  case tye1 of
+    TupleTy tyExprs -> do
+      let
+        e1TyMapping = concat $ zipWith assocPat pats tyExprs
+        ctxExtended = ctxOmega ++ e1TyMapping
+      (tyC, ctxDelta) <- tyInfer ctxExtended e2
+      -- We need to substitute over the polymorphic return variable here
+      let tyCSpecialize = ctxSubst ctxDelta tyC
+      completedRuleWithTyRet (TyInfer "Let=>") (tyCSpecialize, ctxDelta)
+    _ -> throwError "let-binding tuple is not a tuple type"
   where
     assocPat :: Pat -> Ty -> [CtxItem]
     assocPat WildCardPat _ = []
