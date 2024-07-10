@@ -75,21 +75,31 @@ instance Pretty CtxItem where
     pretty (CtxMarker marker) = pretty marker <> "Mark"
 
 instance Pretty JudgmentTrace where
-    pretty (AlgTypingTrace rule (ctx, expr, ty)) =
-      "Alg" <+> pretty rule <> hardline <> vcat
+    pretty (TyCheckTrace (ctx, expr, ty)) =
+      "TyCheck" <+> hardline <> vcat
         [ "Ctx:" <+> pretty ctx
         , "Expr:" <+> pretty expr
         , "Ty:" <+> pretty ty]
-    pretty (SubtypeTrace rule (ctx, t1, t2)) =
-      "Sub" <+> prettyTraceTemplate rule ctx t1 t2
-    pretty (InstLTrace rule (ctx, t1, t2)) =
-      "InstL" <+> prettyTraceTemplate rule ctx t1 t2
-    pretty (InstRTrace rule (ctx, t1, t2)) =
-      "InstR" <+> prettyTraceTemplate rule ctx t1 t2
+    pretty (TyInferTrace (ctx, expr)) =
+      "TyInfer" <+> hardline <> vcat
+        [ "Ctx:" <+> pretty ctx
+        , "Expr:" <+> pretty expr ]
+    pretty (TyAppInferTrace (ctx, ty, expr)) =
+      "TyAppInfer" <+> hardline <> vcat
+        [ "Ctx:" <+> pretty ctx
+        , "Expr:" <+> pretty expr
+        , "Ty:" <+> pretty ty]
+    pretty (SubtypeTrace (ctx, t1, t2)) =
+      "Sub" <+> prettyTraceTemplate ctx t1 t2
+    pretty (InstLTrace (ctx, t1, t2)) =
+      "InstL" <+> prettyTraceTemplate ctx t1 t2
+    pretty (InstRTrace (ctx, t1, t2)) =
+      "InstR" <+> prettyTraceTemplate ctx t1 t2
+    pretty EmptyTrace = ""
 
-prettyTraceTemplate :: Text -> Ctx -> Ty -> Ty -> Doc ann
-prettyTraceTemplate rule ctx t1 t2 =
-    pretty rule <> hardline <> vcat
+prettyTraceTemplate :: Ctx -> Ty -> Ty -> Doc ann
+prettyTraceTemplate ctx t1 t2 =
+    hardline <> vcat
       [ "Ctx:" <+> pretty ctx
       , "t1:" <+> pretty t1
       , "t2:" <+> pretty t2]
