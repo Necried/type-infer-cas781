@@ -34,7 +34,7 @@ exprOrDecl :: Parser (Either Expr (Name, Expr, Maybe Ty))
 exprOrDecl =
     choice
         [
-            try $ Right <$> declaration
+            Right <$> try declaration
         ,   Left <$> expr
         ]
 
