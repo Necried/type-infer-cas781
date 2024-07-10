@@ -65,16 +65,27 @@ initMetaDataGBuilder = MetaDataGBuilder initBuilder initMetaData
 
 data Expr =
     Var Text
-  | UnitTerm
-  | BooleanTerm Bool
-  | IntegerTerm Int
+  | LiteralExpr Literal
+  | Tuple [Expr]
   | BinOpExpr Op Expr Expr
   | PredOpExpr PredOp Expr Expr
   | If Expr {-condition-} Expr {-then-} Expr {-else-}
-  | Let Text Expr Expr -- let x = e in e'
+  | Let Pat Expr Expr -- let x = e in e'
   | Lam Text Expr
   | App Expr Expr
   | Ann Expr Ty
+  deriving (Eq, Show)
+
+data Literal =
+    UnitTerm
+  | BooleanTerm Bool
+  | IntegerTerm Int
+  deriving (Eq, Show)
+
+data Pat =
+    VarPat Text
+  | TuplePat [Pat]
+  | WildCardPat
   deriving (Eq, Show)
 
 data Op
@@ -103,6 +114,7 @@ data Ty =
     UnitTy
   | BooleanTy
   | IntegerTy
+  | TupleTy [Ty]
   | TyVar Text
   | TyVarHat Text
   | TyArrow Ty Ty

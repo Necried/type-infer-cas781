@@ -12,11 +12,12 @@ import Data.Text (Text)
 -- NOTE: Currently unused: The environment performs the
 -- substitution now.
 -- termSubst [x := t]E
-termSubst :: Text -> Expr -> Expr -> Expr
-termSubst _ _ UnitTerm = UnitTerm
-termSubst x t (Var y)
-  | x == y = t
-  | otherwise = Var y
+-- termSubst :: Text -> Expr -> Expr -> Expr
+-- termSubst _ _ UnitTerm = UnitTerm
+-- termSubst x t (Var y)
+--   | x == y = t
+--  | otherwise = Var y
+
 -- Assuming no variable clashes here.
 -- Precondition: y != x, otherwise, name capturing will happen
 termSubst x t (Lam y e) =
@@ -48,9 +49,9 @@ instance Show Value where
 type Env = Map Text Value
 
 eval :: Env -> Expr -> Value
-eval _ UnitTerm = UnitValue
-eval _ (BooleanTerm b) = BooleanValue b
-eval _ (IntegerTerm i) = IntegerValue i
+eval _ (LiteralExpr UnitTerm) = UnitValue
+eval _ (LiteralExpr (BooleanTerm b)) = BooleanValue b
+eval _ (LiteralExpr (IntegerTerm i)) = IntegerValue i
 eval env e@(BinOpExpr op e1 e2) =
   case (eval env e1, eval env e2) of
     (IntegerValue i1, IntegerValue i2) -> IntegerValue $ applyOp i1 i2
@@ -82,8 +83,10 @@ eval env e@(If p e1 e2) = case eval env p of
   (BooleanValue True) -> eval env e1
   (BooleanValue False) -> eval env e2
   _ -> error $ "eval: if expression: " ++ show e
-eval env (Let x e1 e2) =
-  eval env (App (Lam x e2) e1)
+-- eval env (Let (VarPat x) e1 e2) =
+--  eval env (App (Lam x e2) e1)
+eval env (Let pat e1 e2) =
+  eval (assocPatEval env pat e1) e2
 eval env (Var x) =
   case M.lookup x env of
     Nothing -> error $ "eval: variable " ++ show x ++ " not in scope"
@@ -97,3 +100,10 @@ vapp :: Value -> Value -> Value
 vapp (LamValue _ f) v = f v
 vapp (NValue n)     v = NValue (NApp n v)
 vapp v' _ = error $ "Couldn't apply value " ++ show v'
+
+assocPatEval :: Env -> Pat -> Expr -> Env
+assocPatEval env WildCardPat e = env
+assocPatEval env (VarPat x) e = M.insert x v env
+  where v = eval env e
+assocPatEval env (TuplePat pats) (Tuple exprs) =
+  M.unions $ zipWith (assocPatEval env) pats exprs

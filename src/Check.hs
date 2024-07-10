@@ -8,7 +8,7 @@ import Prelude hiding (LT, GT)
 import Control.Monad.Trans.State.Strict
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Error.Class (throwError)
-import Control.Monad (unless, when)
+import Control.Monad (unless, when, zipWithM_)
 
 import qualified Data.Set as Set
 import Data.Set (Set)
@@ -45,6 +45,9 @@ isMonotype _ = True
 -- 2. in the paper, it's [alphaHat / alpha]
 tySubst :: Ty -> Ty -> Ty -> Ty
 tySubst alpha alphaHat UnitTy = UnitTy
+tySubst alpha alphaHat BooleanTy = BooleanTy
+tySubst alpha alphaHat IntegerTy = IntegerTy
+tySubst alpha alphaHat (TupleTy exprs) = TupleTy $ map (tySubst alpha alphaHat) exprs
 tySubst alpha alphaHat (TyVar alphaName) = 
   if TyVar alphaName == alpha then alphaHat else TyVar alphaName
 tySubst alpha alphaHat (TyVarHat alphaName) = TyVarHat alphaName
@@ -57,6 +60,7 @@ ctxSubst ctx (TyVar alphaName) = TyVar alphaName
 ctxSubst ctx UnitTy = UnitTy
 ctxSubst ctx BooleanTy = BooleanTy
 ctxSubst ctx IntegerTy = IntegerTy
+ctxSubst ctx (TupleTy exprs) = TupleTy $ map (ctxSubst ctx) exprs
 ctxSubst ctx (TyVarHat alphaName) 
   | any hasEq ctx =
     ctxSubst ctx tau
@@ -98,6 +102,18 @@ subTypeOf' ctx BooleanTy BooleanTy = do
 subTypeOf' ctx IntegerTy IntegerTy = do
   completedRule (SubtypeOf "<:IntegerTy") ctx
 
+subTypeOf' ctx (TupleTy exprs1) (TupleTy exprs2) = do
+  unless (length exprs1 == length exprs2) $
+    throwError $ Text.concat
+      [ "Tuple lengths are not the same: "
+      , Text.pack $ show (length exprs1), " and "
+      , Text.pack $ show (length exprs2)
+      ]
+  zipWithM_ (subTypeOf ctx) exprs1 exprs2
+  completedRule (SubtypeOf $ "<:TupleTy" <> (Text.pack $ show n)) ctx
+  where
+    n = length exprs1
+  
 subTypeOf' ctx a1@(TyVarHat alpha0) a2@(TyVarHat alpha1) = do
   -- throw error if they're not the same
   unless (alpha0 == alpha1) $ 
@@ -265,6 +281,12 @@ tyInfer' ctx (BooleanTerm _) = do
   completedRuleWithTyRet (TyInfer "BoolI=>") (BooleanTy, ctx)
 tyInfer' ctx (IntegerTerm _) = do
   completedRuleWithTyRet (TyInfer "IntI=>") (IntegerTy, ctx)
+tyInfer' ctx (Tuple exprs) = do
+  retTyCtxList <- mapM (tyInfer ctx) exprs -- [TyStateT metadata (Ty, Ctx)] -- TyStateT metadata [(Ty, Ctx)]
+  let
+    retTyList = map fst retTyCtxList
+    n = length exprs
+  completedRuleWithTyRet (TyInfer $ "Tuple=>" <> (Text.pack $ show n)) (TupleTy retTyList, ctx)
 tyInfer' ctx (BinOpExpr op e1 e2) =
   let
     tyOp =
@@ -290,7 +312,7 @@ tyInfer' ctx (PredOpExpr op e1 e2) =
     _ <- tyCheck ctx e2 tyOp
 
     completedRuleWithTyRet (TyInfer "PredOp=>") (BooleanTy, ctx)
-tyInfer' ctx (Let x e1 e2) = do
+tyInfer' ctx (Let (VarPat x) e1 e2) = do
   -- tyCheck ctx (App (Lam x e2) e1) tyC
   -- (tyA, ctxOmega) <- tyInfer ctx (Lam x e2)
   -- (tyC, ctxDelta) <- tyAppInfer' ctxOmega (ctxSubst ctxOmega tyA) e1
@@ -299,7 +321,25 @@ tyInfer' ctx (Let x e1 e2) = do
     e1TyMapping = CtxMapping x tyA
     ctxExtended = ctxOmega <: e1TyMapping
   (tyC, ctxDelta) <- tyInfer ctxExtended e2
-  completedRuleWithTyRet (TyInfer "Let=>") (tyC, ctxDelta)
+  -- We need to substitute over the polymorphic return variable here
+  let tyCSpecialize = ctxSubst ctxDelta tyC
+  completedRuleWithTyRet (TyInfer "Let=>") (tyCSpecialize, ctxDelta)
+
+tyInfer' ctx (Let (TuplePat pats) e1@(Tuple exprs) e2) = do
+  (TupleTy tyExprs, ctxOmega) <- tyInfer ctx e1
+  let
+    e1TyMapping = concat $ zipWith assocPat pats tyExprs
+    ctxExtended = ctxOmega ++ e1TyMapping
+  (tyC, ctxDelta) <- tyInfer ctxExtended e2
+  -- We need to substitute over the polymorphic return variable here
+  let tyCSpecialize = ctxSubst ctxDelta tyC
+  completedRuleWithTyRet (TyInfer "Let=>") (tyCSpecialize, ctxDelta)
+  where
+    assocPat :: Pat -> Ty -> [CtxItem]
+    assocPat WildCardPat _ = []
+    assocPat (VarPat patVar) ty = [CtxMapping patVar ty]
+    assocPat (TuplePat patList) (TupleTy tyList) =
+      concat $ zipWith assocPat patList tyList -- [Maybe CtxItem]
 
 tyInfer' ctx (Ann e ty) = do
   ctx' <- tyCheck ctx e ty

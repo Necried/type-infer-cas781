@@ -24,9 +24,7 @@ instance Pretty DeclMap where
 
 instance Pretty Expr where
     pretty (Var v) = pretty v
-    pretty UnitTerm = "()"
-    pretty (BooleanTerm b) = pretty b
-    pretty (IntegerTerm i) = pretty i
+    pretty (LiteralExpr l) = pretty l
     pretty (If p e1 e2) = "if" <+> pretty p <+> "then" <+> pretty e1 <+> pretty e2
     pretty (BinOpExpr binOp e1 e2) =
       pretty e1 <+> pretty binOp <+> pretty e2
@@ -43,6 +41,16 @@ instance Pretty Expr where
     pretty (App e0 e1) = parens (pretty e0) <+> parens (pretty e1)
     pretty (Ann e t) = pretty e <+> "::" <+> pretty t
 
+instance Pretty Literal where
+    pretty UnitTerm = "()"
+    pretty (BooleanTerm b) = pretty b
+    pretty (IntegerTerm i) = pretty i
+
+instance Pretty Pat where
+    pretty (VarPat p) = pretty p
+    pretty (TuplePat pats) = pretty pats
+    pretty WildCardPat = "_"
+    
 instance Pretty Op where
   pretty Plus = "+"
   pretty Minus = "-"

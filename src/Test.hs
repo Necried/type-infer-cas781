@@ -91,6 +91,10 @@ cAndTFeqTBody = Ann cAndBody cAndType `App` cTrueBody `App` cFalseBody
 letBody = Let "x" (IntegerTerm 2) (BinOpExpr Plus (Var "x") (IntegerTerm 3))
 letTy = IntegerTy
 
+-- Tuple test
+tupleBody = Tuple [IntegerTerm 2, BooleanTerm True, Ann idBody idType]
+runTupleTest = runTyInfer [] tupleBody 
+
 -- Test harness
 runPassingTests = do
   runTyCheck [] idBody idType
