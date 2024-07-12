@@ -114,8 +114,8 @@ factBody =
          )
      )
     )
-  (Var "fact")
-  -- (App (Var "fact") (int 5))
+  -- (Var "fact")
+  (App (Var "fact") (int 5))
 
 infLoopBody =
   Let (VarPat "f") (flip Ann infLoopType $ Lam "x" $ App (Var "f") (Var "x"))
