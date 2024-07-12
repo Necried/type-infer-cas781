@@ -7,7 +7,6 @@ import Prelude hiding (LT, GT)
 
 import Control.Monad.Trans.State.Strict
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Error.Class (throwError)
 import Control.Monad (unless, when, zipWithM_)
 
 import qualified Data.Set as Set
@@ -15,6 +14,8 @@ import Data.Set (Set)
 import Data.Text (Text)
 import Data.List (find)
 import qualified Data.Text as Text
+
+import Debug.Pretty.Simple (pTraceShowM)
 
 import Types
 import Utils
@@ -73,8 +74,10 @@ ctxSubst ctx (TyArrow tyA tyB) = TyArrow (ctxSubst ctx tyA) (ctxSubst ctx tyB)
 ctxSubst ctx (Forall alphaName tyA) = Forall alphaName (ctxSubst ctx tyA)
 
 instance TyJudge MetaData where
-  completedRule _ ctx = pure ctx
-  completedRuleWithTyRet _ ret = pure ret
+  completedRule r ctx = pure ctx
+    -- pTraceShowM r >> pTraceShowM ctx >> pure ctx
+  completedRuleWithTyRet r ret = pure ret
+    -- pTraceShowM r >> pTraceShowM ret >> pure ret
   getNewVar varName = do
     v <- gets varCounter
     modify $ \s -> s { varCounter = v + 1 }
@@ -90,7 +93,7 @@ subTypeOf' :: TyJudge metadata => Ctx -> Ty -> Ty -> TyStateT metadata Ctx
 subTypeOf' ctx tv0@(TyVar alpha0) tv1@(TyVar alpha1) = do
   -- throw error if they're not the same
   unless (alpha0 == alpha1) $ 
-    throwError  $ Text.concat ["Type variable ", alpha0, " does not equal ", alpha1]
+    throwErrorWithContext ctx  $ Text.concat ["Type variable ", alpha0, " does not equal ", alpha1]
   completedRule (SubtypeOf "<:Var") ctx
 
 subTypeOf' ctx UnitTy UnitTy = do
@@ -104,7 +107,7 @@ subTypeOf' ctx IntegerTy IntegerTy = do
 
 subTypeOf' ctx (TupleTy exprs1) (TupleTy exprs2) = do
   unless (length exprs1 == length exprs2) $
-    throwError $ Text.concat
+    throwErrorWithContext ctx $ Text.concat
       [ "Tuple lengths are not the same: "
       , Text.pack $ show (length exprs1), " and "
       , Text.pack $ show (length exprs2)
@@ -117,7 +120,7 @@ subTypeOf' ctx (TupleTy exprs1) (TupleTy exprs2) = do
 subTypeOf' ctx a1@(TyVarHat alpha0) a2@(TyVarHat alpha1) = do
   -- throw error if they're not the same
   unless (alpha0 == alpha1) $ 
-    throwError $ Text.concat ["Type variable ", alpha0, "Hat does not equal ", alpha1, "Hat", " with context: ", Text.pack $ show ctx]
+    throwErrorWithContext ctx $ Text.concat ["Type variable ", alpha0, "Hat does not equal ", alpha1, "Hat", " with context: ", Text.pack $ show ctx]
   completedRule (SubtypeOf "<:Exvar") ctx
 
 subTypeOf' ctx a1@(TyArrow tyA1 tyA2) a2@(TyArrow tyB1 tyB2) = do
@@ -139,38 +142,40 @@ subTypeOf' ctx tyA forTy@(Forall alphaName tyB) = do
 
 subTypeOf' ctx aHat@(TyVarHat alphaName) tyA = do
   when (Set.member (TyVarHat alphaName) $ freeVars tyA) $
-    throwError $ Text.concat["Type variable ", alphaName, "Hat exists as a free variable in the given type."]
+    throwErrorWithContext ctx $ Text.concat["<:InstantiateL: Type variable ", alphaName, "Hat exists as a free variable in the given type."]
   unless ((CtxItemHat alphaName) `elem` ctx) $
-    throwError $ Text.concat ["Type variable ", alphaName, "Hat does not exist in the context."]
+    throwErrorWithContext ctx $ Text.concat ["Type variable ", alphaName, "Hat does not exist in the context: ", Text.pack $ show $ filter filterItemHats ctx]
   ctxDelta <- instL ctx (TyVarHat alphaName) tyA
   completedRule (SubtypeOf "<:InstantiateL") ctxDelta
-
+  where
+    filterItemHats (CtxItemHat _) = True
+    filterItemHate _ = False
 subTypeOf' ctx tyA aHat@(TyVarHat alphaName) = do
   when (Set.member (TyVarHat alphaName) $ freeVars tyA) $
-    throwError $ Text.concat ["Type variable ", alphaName, "Hat exists as a free variable in the given type."]
+    throwErrorWithContext ctx $ Text.concat ["Type variable ", alphaName, "Hat exists as a free variable in the given type."]
   unless ((CtxItemHat alphaName) `elem` ctx) $
-    throwError $ Text.concat ["Type variable ", alphaName, "Hat does not exist in the context."]
+    throwErrorWithContext ctx $ Text.concat ["<:InstantiateR: Type variable ", alphaName, "Hat does not exist in the context when deducing LHS tyA: ", Text.pack $ show tyA, ": ", Text.pack $ show ctx]
   ctxDelta <- instR ctx tyA (TyVarHat alphaName)
   completedRule (SubtypeOf "<:InstantiateR") ctxDelta
 
-subTypeOf' _ tyA tyB = error $ "No subtype instance of " ++ show tyA ++ " " ++ show tyB
+subTypeOf' ctx tyA tyB = error $ "No subtype instance of " ++ show tyA ++ " " ++ show tyB ++ " with context " ++ show ctx
 
 instL' :: TyJudge metadata => Ctx -> Ty -> Ty -> TyStateT metadata Ctx
 instL' ctx tvHat@(TyVarHat alphaName) tau = do
   unless (isMonotype tau) $
-    throwError $ Text.concat ["Type ", Text.pack $ show tau, " is not a monotype"]
+    throwErrorWithContext ctx $ Text.concat ["Type ", Text.pack $ show tau, " is not a monotype"]
   unless ((CtxItemHat alphaName) `elem` ctx) $
-    throwError $ Text.concat ["Type variable ", alphaName, "Hat does not exist in the context."]
+    throwErrorWithContext ctx $ Text.concat ["Type variable ", alphaName, "Hat does not exist in the context."]
   let newItem = CtxEquality alphaName tau
       gammaAlphaTauGamma' = replaceItem (CtxItemHat alphaName) [newItem] ctx
   completedRule (InstL "InstLSolve") gammaAlphaTauGamma'
 instL' ctx tvAlpha@(TyVarHat alphaName) tvBeta@(TyVarHat betaName) = do
   unless ((CtxItemHat alphaName) `elem` ctx) $
-    throwError $ Text.concat ["Type variable ", alphaName, "Hat does not exist in the context."]
+    throwErrorWithContext ctx $ Text.concat ["Type variable ", alphaName, "Hat does not exist in the context."]
 
   let (ctxL, ctxR) = splitOnItem (CtxItemHat alphaName) ctx
   unless ((CtxItemHat betaName) `elem` ctxR) $
-    throwError $ Text.concat ["Type variable ", betaName, "Hat does not exist after ", alphaName, "Hat in the context."]
+    throwErrorWithContext ctx $ Text.concat ["Type variable ", betaName, "Hat does not exist after ", alphaName, "Hat in the context."]
 
   completedRule (InstL "InstLReach") $ ctx |> replaceItem (CtxItemHat betaName) [CtxEquality betaName (TyVarHat alphaName)]
 
@@ -185,7 +190,7 @@ instL' ctx tvHat@(TyVarHat alphaName) tArr@(TyArrow tyA1 tyA2) = do
   completedRule (InstL "InstLArr") ctxDelta 
 instL' ctx tyVarAlphaHat@(TyVarHat alphaName) forTy@(Forall betaName tyB) = do
   unless ((CtxItemHat alphaName) `elem` ctx) $
-    throwError $ Text.concat ["Type variable ", alphaName, "Hat does not exist in the context."]
+    throwErrorWithContext ctx $ Text.concat ["Type variable ", alphaName, "Hat does not exist in the context."]
 
   let ctxExtended = ctx <: (CtxItem betaName)
 
@@ -196,19 +201,19 @@ instL' ctx tyVarAlphaHat@(TyVarHat alphaName) forTy@(Forall betaName tyB) = do
 instR' :: TyJudge metadata => Ctx -> Ty -> Ty -> TyStateT metadata Ctx
 instR' ctx tau tvHat@(TyVarHat alphaName) = do
   unless (isMonotype tau) $
-    throwError $ Text.concat ["Type ", Text.pack $ show tau, " is not a monotype"]
+    throwErrorWithContext ctx $ Text.concat ["Type ", Text.pack $ show tau, " is not a monotype"]
   unless ((CtxItemHat alphaName) `elem` ctx) $
-    throwError $ Text.concat ["Type variable ", alphaName, "Hat does not exist in the context."]
+    throwErrorWithContext ctx $ Text.concat ["Type variable ", alphaName, "Hat does not exist in the context."]
   let newItem = CtxEquality alphaName tau
       gammaAlphaTauGamma' = replaceItem (CtxItemHat alphaName) [newItem] ctx
   completedRule (InstR "InstRSolve") gammaAlphaTauGamma'
 instR' ctx tvBeta@(TyVarHat betaName) tvAlpha@(TyVarHat alphaName) = do
   unless ((CtxItemHat alphaName) `elem` ctx) $
-    throwError $ Text.concat ["Type variable ", alphaName, "Hat does not exist in the context."]
+    throwErrorWithContext ctx $ Text.concat ["Type variable ", alphaName, "Hat does not exist in the context."]
 
   let (ctxL, ctxR) = splitOnItem (CtxItemHat alphaName) ctx
   unless ((CtxItemHat betaName) `elem` ctxR) $
-    throwError $ Text.concat ["Type variable ", betaName, "Hat does not exist after ", alphaName, "Hat in the context."]
+    throwErrorWithContext ctx $ Text.concat ["Type variable ", betaName, "Hat does not exist after ", alphaName, "Hat in the context."]
 
   completedRule (InstR "InstRReach") $ ctx |> replaceItem (CtxItemHat betaName) [CtxEquality betaName (TyVarHat alphaName)]
 instR' ctx tArr@(TyArrow tyA1 tyA2) tvHat@(TyVarHat alphaName) = do
@@ -222,7 +227,7 @@ instR' ctx tArr@(TyArrow tyA1 tyA2) tvHat@(TyVarHat alphaName) = do
   completedRule (InstR "InstRArr")ctxDelta 
 instR' ctx forTy@(Forall betaName tyB)  tyVarAlphaHat@(TyVarHat alphaName) = do
   unless ((CtxItemHat alphaName) `elem` ctx) $
-    throwError $ Text.concat ["Type variable ", alphaName, "Hat does not exist in the context."]
+    throwErrorWithContext ctx $ Text.concat ["Type variable ", alphaName, "Hat does not exist in the context."]
 
   let ctxExtended = ctx <: CtxMarker betaName <: CtxItemHat betaName
       tyBSubst = tySubst (TyVar betaName) (TyVarHat betaName) tyB
@@ -238,11 +243,14 @@ tyCheck' :: TyJudge metadata => Ctx -> Expr -> Ty -> TyStateT metadata Ctx
 tyCheck' ctx (LiteralExpr UnitTerm) UnitTy = do
   completedRule (TyCheck "1I") ctx
 tyCheck' ctx ifExpr@(If p e1 e2) ty = do
-  _ <- tyCheck ctx p BooleanTy
-  _ <- tyCheck ctx e1 ty
-  _ <- tyCheck ctx e2 ty
+  
+  ctxAfterIf <- tyCheck ctx p BooleanTy
 
-  completedRule (TyCheck "If") ctx
+  ctxAfterThen <- tyCheck ctxAfterIf e1 ty
+
+  ctxAfterElse <- tyCheck ctxAfterThen e2 ty
+
+  completedRule (TyCheck "If") ctxAfterElse
 tyCheck' ctx (Lam x e) (TyArrow tyA tyB) = do
   ctxDeltaXAlphaOmega <- tyCheck ctxExtended e tyB
   let ctxDelta = takeUntilVar (CtxMapping x tyA) ctxDeltaXAlphaOmega
@@ -257,15 +265,15 @@ tyCheck' ctx e (Forall alpha tyA) = do
 tyCheck' ctx e tyB = do
   (tyA, ctxTheta) <- tyInfer ctx e
 
+    -- NOTE: We have to use ctxTheta here!!
+  let subTypeOfCtx = subTypeOf ctxTheta
   ctxDelta <- ctxSubst ctxTheta tyA `subTypeOfCtx` ctxSubst ctxTheta tyB
 
   completedRule (TyCheck "Sub") ctxDelta
-  where
-    subTypeOfCtx = subTypeOf ctx
 
 tyInfer' :: TyJudge metadata => Ctx -> Expr -> TyStateT metadata (Ty, Ctx)
 tyInfer' ctx (Var x) = do
-  varFromCtx <- lift $ lookupVar lookupPred ctx errMsg
+  varFromCtx <- lift $ lookupVar lookupPred ctx (ctx, errMsg)
   completedRuleWithTyRet (TyInfer "Var") (tyItem varFromCtx, ctx)
   where
     lookupPred :: CtxItem -> Bool
@@ -294,38 +302,99 @@ tyInfer' ctx (BinOpExpr op e1 e2) =
       then IntegerTy
       else error "unimplemented ty op in tyInfer"
   in do
-    _ <- tyCheck ctx e1 tyOp
-    _ <- tyCheck ctx e2 tyOp
+    ctxLHS <- tyCheck ctx e1 tyOp
+    ctxRHS <- tyCheck ctxLHS e2 tyOp
 
-    completedRuleWithTyRet (TyInfer "BinOpExpr=>") (tyOp, ctx)
+    completedRuleWithTyRet (TyInfer "BinOpExpr=>") (tyOp, ctxRHS)
 tyInfer' ctx (PredOpExpr op e1 e2) =
   let
     tyOp =
-      if op `elem` [LT, GT, LTE, GTE]
+      if op `elem` [LT, GT, LTE, GTE, Eq]
       then IntegerTy
       -- TODO: Make Eq polymorphic
-      else if op `elem` [And, Or, Eq]
+      else if op `elem` [And, Or]
       then BooleanTy
       else error "unimplemented ty op in tyInfer for PredOp"
   in do
-    _ <- tyCheck ctx e1 tyOp
-    _ <- tyCheck ctx e2 tyOp
+    ctxAfterLHS <- tyCheck ctx e1 tyOp
+    ctxAfterRHS <- tyCheck ctxAfterLHS e2 tyOp
 
-    completedRuleWithTyRet (TyInfer "PredOp=>") (BooleanTy, ctx)
+    completedRuleWithTyRet (TyInfer "PredOp=>") (BooleanTy, ctxAfterRHS)
+
+{-
+tyInfer' ctx (Let (VarPat x) e1@(Lam arg body) e2) = do
+  -- tyCheck ctx (App (Lam x e2) e1) tyC
+  -- (tyA, ctxOmega) <- tyInfer ctx (Lam x e2)
+  -- (tyC, ctxDelta) <- tyAppInfer' ctxOmega (ctxSubst ctxOmega tyA) e1
+  alphaHat <- getNewVar "alpha"
+  betaHat <- getNewVar "beta"
+  let
+    alphaHatItem = CtxItemHat alphaHat
+    alphaHatTyVar = TyVarHat alphaHat
+    betaHatItem = CtxItemHat betaHat
+    betaHatTyVar = TyVarHat betaHat
+    xTyMapping = CtxMapping x (TyArrow alphaHatTyVar betaHatTyVar)
+    ctxExtended = ctx <: alphaHatItem <:betaHatItem <: xTyMapping
+  (tyA, ctxOmega) <- tyInfer ctxExtended e1
+  let
+    e1TyMapping = CtxMapping x $ ctxSubst ctxOmega tyA
+    ctxExtended = ctxOmega <: e1TyMapping
+  (tyC, ctxDelta) <- tyInfer ctxExtended e2
+  -- We need to substitute over the polymorphic return variable here
+  -- let tyCSpecialize = ctxSubst ctxDelta tyC
+  completedRuleWithTyRet (TyInfer "Let=>") (tyC, ctxDelta)
+-}
+tyInfer' ctx (Let (VarPat x) e1 e2) = do
+  -- tyCheck ctx (App (Lam x e2) e1) tyC
+  -- (tyA, ctxOmega) <- tyInfer ctx (Lam x e2)
+  -- (tyC, ctxDelta) <- tyAppInfer' ctxOmega (ctxSubst ctxOmega tyA) e1
+  alphaHat <- getNewVar "alpha"
+  -- betaHat <- getNewVar "beta"
+  let
+    alphaHatItem = CtxItemHat alphaHat
+    alphaHatTyVar = TyVarHat alphaHat
+    -- betaHatItem = CtxItemHat betaHat
+    -- betaHatTyVar = TyVarHat betaHat
+    xTyMapping = CtxMapping x alphaHatTyVar -- (TyArrow alphaHatTyVar betaHatTyVar)
+    ctxWithXMapping = ctx <: alphaHatItem <: {- betaHatItem <: -} xTyMapping
+  (tyA, ctxOmega) <- tyInfer ctxWithXMapping e1
+  -- let subTypeOfCtx = subTypeOf ctxOmega
+  -- ctxOmega' <- ctxSubst ctxOmega tyA `subTypeOfCtx` ctxSubst ctxOmega alphaHatTyVar
+  let
+    tyASpecialize = ctxSubst ctxOmega tyA
+    e1TyMapping = CtxMapping x tyASpecialize
+    ctxExtended = ctxOmega <: e1TyMapping
+  pTraceShowM tyASpecialize
+  when (notSpecialized tyASpecialize) $ throwErrorWithContext ctxExtended $ Text.concat
+    [ "let-binding for expression "
+    , Text.pack $ show e1
+    , " did not specialize, and has type "
+    , Text.pack $ show tyA
+    ]
+  let ctxOmega' = removeOldOccurence xTyMapping ctxExtended
+  pTraceShowM (tyA, tyASpecialize, ctxOmega', ctxExtended)
+  (tyC, ctxDelta) <- tyInfer ctxOmega' e2
+  -- We need to substitute over the polymorphic return variable here
+  completedRuleWithTyRet (TyInfer "Let=>") (tyC, ctxDelta)
+  where
+    notSpecialized (TyVarHat _) = True
+    notSpecialized _ = False
+{-
 tyInfer' ctx (Let (VarPat x) e1 e2) = do
   -- tyCheck ctx (App (Lam x e2) e1) tyC
   -- (tyA, ctxOmega) <- tyInfer ctx (Lam x e2)
   -- (tyC, ctxDelta) <- tyAppInfer' ctxOmega (ctxSubst ctxOmega tyA) e1
   (tyA, ctxOmega) <- tyInfer ctx e1
   let
-    e1TyMapping = CtxMapping x tyA
+    tyASpecialize = ctxSubst ctxOmega tyA
+    e1TyMapping = CtxMapping x tyASpecialize
     ctxExtended = ctxOmega <: e1TyMapping
   (tyC, ctxDelta) <- tyInfer ctxExtended e2
   -- We need to substitute over the polymorphic return variable here
   let tyCSpecialize = ctxSubst ctxDelta tyC
-  completedRuleWithTyRet (TyInfer "Let=>") (tyCSpecialize, ctxDelta)
-
-tyInfer' ctx (Let (TuplePat pats) e1@(Tuple exprs) e2) = do
+  completedRuleWithTyRet (TyInfer "Let=>") (tyC, ctxDelta)
+-}
+tyInfer' ctx (Let (TuplePat pats) e1 e2) = do
   (tye1, ctxOmega) <- tyInfer ctx e1
   case tye1 of
     TupleTy tyExprs -> do
@@ -336,7 +405,7 @@ tyInfer' ctx (Let (TuplePat pats) e1@(Tuple exprs) e2) = do
       -- We need to substitute over the polymorphic return variable here
       let tyCSpecialize = ctxSubst ctxDelta tyC
       completedRuleWithTyRet (TyInfer "Let=>") (tyCSpecialize, ctxDelta)
-    _ -> throwError "let-binding tuple is not a tuple type"
+    _ -> throwErrorWithContext ctx "let-binding tuple is not a tuple type"
   where
     assocPat :: Pat -> Ty -> [CtxItem]
     assocPat WildCardPat _ = []
@@ -378,10 +447,10 @@ tyAppInfer' ctx (TyArrow tyA tyC) e = do
   ctxDelta <- tyCheck ctx e tyA
   completedRuleWithTyRet (TyAppInfer "->App") (tyC, ctxDelta)
 tyAppInfer' ctx (TyVarHat alphaName) e = do
-  alphaHat1 <- getNewVar alphaName
-  alphaHat2 <- getNewVar alphaName
+  alphaHat1 <- getNewVar "alpha"
+  alphaHat2 <- getNewVar "alpha"
   let alphaArrow = TyArrow (TyVarHat alphaHat1) (TyVarHat alphaHat2)
-      newItems = [CtxItem alphaHat2, CtxItem alphaHat1, CtxEquality alphaName alphaArrow]
+      newItems = [CtxItemHat alphaHat2, CtxItemHat alphaHat1, CtxEquality alphaName alphaArrow]
       replacedCtx = replaceItem (CtxItemHat alphaName) newItems ctx
   ctxDelta <- tyCheck replacedCtx e (TyVarHat alphaHat1)
   completedRuleWithTyRet (TyAppInfer "alphaHatApp") (TyVarHat alphaHat2, ctxDelta)

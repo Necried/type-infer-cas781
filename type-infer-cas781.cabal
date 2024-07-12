@@ -56,6 +56,7 @@ library
     , haskeline
     , mtl
     , parsec
+    , pretty-simple
     , prettyprinter
     , text
     , transformers
@@ -80,6 +81,7 @@ executable repl
     , haskeline
     , mtl
     , parsec
+    , pretty-simple
     , prettyprinter
     , text
     , transformers
@@ -106,6 +108,7 @@ test-suite type-infer-cas781-test
     , haskeline
     , mtl
     , parsec
+    , pretty-simple
     , prettyprinter
     , text
     , transformers

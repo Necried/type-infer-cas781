@@ -1,9 +1,11 @@
+{-# LANGUAGE FlexibleContexts #-}
+
 module Utils where
 
-import Data.List (find)
+import Data.List (find, delete)
 import Data.List.Extra
 import Data.Function ((&))
-
+import Control.Monad.Error.Class (MonadError, throwError)
 
 lookupVar :: Foldable t => (a -> Bool) -> t a -> s -> Either s a
 lookupVar f xs errMsg =
@@ -31,6 +33,12 @@ replaceItem x xsR xs =
   gammaL ++ xsR ++ gammaR
   where
     (gammaL, gammaR) = splitOnItem x xs
+
+throwErrorWithContext :: MonadError (c, t) m => c -> t -> m a
+throwErrorWithContext ctx err = throwError (ctx, err)
+
+removeOldOccurence :: Eq a => a -> [a] -> [a]
+removeOldOccurence = delete
 
 infixl 5 <:
 (<:) :: [a] -> a -> [a]

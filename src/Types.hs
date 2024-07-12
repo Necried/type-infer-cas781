@@ -11,9 +11,11 @@ import qualified Data.Text as Text
 import qualified Data.Graph.Inductive.Graph as G
 import qualified Data.Graph.Inductive.PatriciaTree as PT
 
-type Result a = Either Text a
+type Result a = Either ErrMsg a
 
-type TyStateT metadata a = StateT metadata (Either Text) a
+type ErrMsg = (Ctx, Text)
+
+type TyStateT metadata a = StateT metadata (Either ErrMsg) a
 
 type RuleName = Text
 

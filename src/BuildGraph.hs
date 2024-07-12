@@ -38,9 +38,9 @@ instance TyJudge MetaDataGBuilder where
 
   completedRuleWithTyRet r retCtx
     | getRule r `elem` ["Var", "1I=>", "BoolI=>", "IntI=>"] = mkGraphNode r 0 retCtx
-    | getRule r `elem` ["Anno", "Let=>", "->I=>", "Forall-App", "->App", "alphaHatApp"] =
+    | getRule r `elem` ["Anno", "->I=>", "Forall-App", "->App", "alphaHatApp"] =
         mkGraphNode r 1 retCtx
-    | getRule r `elem` ["BinOpExpr=>", "PredOp=>", "->E"] = mkGraphNode r 2 retCtx
+    | getRule r `elem` ["BinOpExpr=>", "Let=>", "PredOp=>", "->E"] = mkGraphNode r 2 retCtx
 
   getNewVar varName = do
     v <- gets (varCounter . metaData)

@@ -32,6 +32,7 @@ dependencies:
 - text
 - fgl
 - prettyprinter
+- pretty-simple
 - haskeline
 
 ghc-options:
