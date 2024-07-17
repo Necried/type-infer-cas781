@@ -125,11 +125,12 @@ inconsistentBody = Let (VarPat "x") (App (Var "x") (int 3)) (Var "x")
 
 -- Tuple tests
 fstBody =
-  Lam "tup" $
+  flip Ann fstTy $ Lam "tup" $
   Let (TuplePat [VarPat "x", VarPat "y"])
       (Var "tup")
       (Var "x")
 fstTy = Forall "a" $ Forall "b" $  TupleTy [TyVar "a", TyVar "b"]
+
 -- Test harness
 runPassingTests = do
   runTyCheck [] idBody idType

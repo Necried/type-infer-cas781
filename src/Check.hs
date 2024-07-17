@@ -7,7 +7,7 @@ import Prelude hiding (LT, GT)
 
 import Control.Monad.Trans.State.Strict
 import Control.Monad.Trans.Class (lift)
-import Control.Monad (unless, when, zipWithM_)
+import Control.Monad (unless, when, zipWithM_, replicateM)
 
 import qualified Data.Set as Set
 import Data.Set (Set)
@@ -35,6 +35,7 @@ freeVars (TyVar varName)      = Set.singleton (TyVar varName)
 freeVars (TyVarHat varName)   = Set.singleton (TyVarHat varName)
 freeVars (TyArrow tyA tyB)    = Set.union (freeVars tyA) (freeVars tyB)
 freeVars (Forall varName ty)  = Set.delete (TyVar varName) $ freeVars ty
+freeVars (TupleTy tys)        = foldr Set.union Set.empty $ map freeVars tys
 
 isMonotype :: Ty -> Bool
 isMonotype (Forall _ _) = False
@@ -75,9 +76,7 @@ ctxSubst ctx (Forall alphaName tyA) = Forall alphaName (ctxSubst ctx tyA)
 
 instance TyJudge MetaData where
   completedRule r ctx = pure ctx
-    -- pTraceShowM r >> pTraceShowM ctx >> pure ctx
   completedRuleWithTyRet r ret = pure ret
-    -- pTraceShowM r >> pTraceShowM ret >> pure ret
   getNewVar varName = do
     v <- gets varCounter
     modify $ \s -> s { varCounter = v + 1 }
@@ -92,7 +91,7 @@ instance TyJudge MetaData where
 subTypeOf' :: TyJudge metadata => Ctx -> Ty -> Ty -> TyStateT metadata Ctx
 subTypeOf' ctx tv0@(TyVar alpha0) tv1@(TyVar alpha1) = do
   -- throw error if they're not the same
-  unless (alpha0 == alpha1) $ 
+  unless (alpha0 == alpha1) $
     throwErrorWithContext ctx  $ Text.concat ["Type variable ", alpha0, " does not equal ", alpha1]
   completedRule (SubtypeOf "<:Var") ctx
 
@@ -120,7 +119,7 @@ subTypeOf' ctx (TupleTy exprs1) (TupleTy exprs2) = do
 subTypeOf' ctx a1@(TyVarHat alpha0) a2@(TyVarHat alpha1) = do
   -- throw error if they're not the same
   unless (alpha0 == alpha1) $ 
-    throwErrorWithContext ctx $ Text.concat ["Type variable ", alpha0, "Hat does not equal ", alpha1, "Hat", " with context: ", Text.pack $ show ctx]
+    throwErrorWithContext ctx $ Text.concat ["Type variable ", alpha0, "Hat does not equal ", alpha1, "Hat"]
   completedRule (SubtypeOf "<:Exvar") ctx
 
 subTypeOf' ctx a1@(TyArrow tyA1 tyA2) a2@(TyArrow tyB1 tyB2) = do
@@ -405,6 +404,24 @@ tyInfer' ctx (Let (TuplePat pats) e1 e2) = do
       -- We need to substitute over the polymorphic return variable here
       let tyCSpecialize = ctxSubst ctxDelta tyC
       completedRuleWithTyRet (TyInfer "Let=>") (tyCSpecialize, ctxDelta)
+    ty@(Forall _ _) -> do
+      let
+        tyExprs = unwrapForalls ty Set.empty
+        e1TyMapping = concat $ zipWith assocPat pats tyExprs
+        ctxExtended = ctxOmega ++ e1TyMapping
+      (tyC, ctxDelta) <- tyInfer ctxExtended e2
+      -- We need to substitute over the polymorphic return variable here
+      let tyCSpecialize = ctxSubst ctxDelta tyC
+      completedRuleWithTyRet (TyInfer "Let=>") (tyCSpecialize, ctxDelta)
+    TyVarHat alphaHat -> do
+      varHats <- replicateM (length pats) (getNewVar "alphaTuple") 
+      let
+        e1TyMapping = concat $ zipWith assocPat pats (map TyVarHat varHats)
+        ctxExtended = ctxOmega ++ e1TyMapping
+      (tyC, ctxDelta) <- tyInfer ctxExtended e2
+      -- We need to substitute over the polymorphic return variable here
+      let tyCSpecialize = ctxSubst ctxDelta tyC
+      completedRuleWithTyRet (TyInfer "Let=>") (tyCSpecialize, ctxDelta)
     _ -> throwErrorWithContext ctx "let-binding tuple is not a tuple type"
   where
     assocPat :: Pat -> Ty -> [CtxItem]
@@ -412,6 +429,14 @@ tyInfer' ctx (Let (TuplePat pats) e1 e2) = do
     assocPat (VarPat patVar) ty = [CtxMapping patVar ty]
     assocPat (TuplePat patList) (TupleTy tyList) =
       concat $ zipWith assocPat patList tyList -- [Maybe CtxItem]
+
+    unwrapForalls :: Ty -> Set Ty -> [Ty]
+    unwrapForalls ty@(Forall varName tyBody) seenVars
+      | not $ (TyVar varName) `Set.member` seenVars = unwrapForalls tyBody (Set.insert (TyVar varName) seenVars)
+      | otherwise = error $ "Malformed forall when checking for tuple type: " ++ show ty
+    unwrapForalls ty@(TupleTy tyExprs) seenVars
+      | freeVars ty == seenVars = tyExprs
+      | otherwise = error $ "Free variables in tuple expression: " ++ show ty
 
 tyInfer' ctx (Ann e ty) = do
   ctx' <- tyCheck ctx e ty
