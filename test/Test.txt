@@ -61,3 +61,20 @@ l = \x -> x + 2
 
 m :: Int -> Int -> Int
 m = \y -> \x -> if x + 2 < y then x * 2 else y
+
+n :: forall a . forall b . (a, b) -> a
+n = \tup -> 
+    let 
+      (x,_) = tup
+    in
+      x
+
+o :: (Int, Int)
+o = (1,2)
+
+p :: forall a . forall b . (a, b) -> a
+p = \tup -> 
+    let 
+      (x,_) = tup
+    in
+      x
