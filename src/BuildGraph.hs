@@ -12,16 +12,22 @@ import qualified Data.Graph.Inductive.Graph as G
 import Control.Monad
 import Control.Monad.Trans.State.Strict
 import qualified Data.Text as Text
+import Data.Text.Read (decimal)
 
 instance TyJudge MetaDataGBuilder where
 
   completedRule stRule@(SubtypeOf r) retCtx
     | r `elem` ["<:Var", "<:Unit", "<:BooleanTy", "<:IntegerTy", "<:Exvar"] =
       mkGraphNode stRule 0 retCtx
-    | r `elem` ["<:Forall-L", "<:Forall-R", "<:InstantiateL", "<:InstantiateR"] = do
+    | r `elem` ["<:Forall-L", "<:Forall-R", "<:InstantiateL", "<:InstantiateR"] =
       mkGraphNode stRule 1 retCtx
-    | r `elem` ["<:->"] = do
+    | r `elem` ["<:->"] =
       mkGraphNode stRule 2 retCtx
+    | "<:TupleTy" `Text.isPrefixOf` r =
+        case decimal (Text.drop (Text.length "<:TupleTy") $ r) of
+          Left err -> error err
+          Right (n, _) -> mkGraphNode stRule n retCtx
+
   completedRule iLRule@(InstL r) retCtx
     | r `elem` ["InstLSolve", "InstLReach"] = mkGraphNode iLRule 0 retCtx
     | r `elem` ["InstLAIIR"] = mkGraphNode iLRule 1 retCtx
@@ -35,6 +41,8 @@ instance TyJudge MetaDataGBuilder where
     | r `elem` ["->I", "Forall-I"] = mkGraphNode tcRule 1 retCtx
     | r `elem` ["Sub"] = mkGraphNode tcRule 2 retCtx
     | r `elem` ["If"] = mkGraphNode tcRule 3 retCtx
+  completedRule r retCtx =
+    error $ "Unhandled case: " ++ show r
 
   completedRuleWithTyRet r retCtx
     | getRule r `elem` ["Var", "1I=>", "BoolI=>", "IntI=>"] = mkGraphNode r 0 retCtx
@@ -44,6 +52,11 @@ instance TyJudge MetaDataGBuilder where
                         "Let=>", "Let=>TupleTy", "Let=>ForallTupleTy", "Let=>TyVarHatTupleTy",
                         "PredOp=>", "->E"]
         = mkGraphNode r 2 retCtx
+    | "Tuple=>" `Text.isPrefixOf` getRule r =
+        case decimal (Text.drop (Text.length "Tuple=>") $ getRule r) of
+          Left err -> error err
+          Right (n, _) -> mkGraphNode r n retCtx
+    | otherwise = error $ "Case unhandled: " ++ show (getRule r)
 
   getNewVar varName = do
     v <- gets (varCounter . metaData)

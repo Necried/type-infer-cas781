@@ -131,9 +131,9 @@ fstBody =
       (Var "x")
 fstTy = Forall "a" $ Forall "b" $ TupleTy [TyVar "a", TyVar "b"] --> TyVar "a"
 
-mkTupleBody =
+mkPairBody =
   Lam "a" $ Lam "b" $ Tuple [Var "a", Var "b"]
-mkTupleTy = Forall "a" $ Forall "b" $ TyVar "a" --> TyVar "b" --> TupleTy [TyVar "a", TyVar "b"]
+mkPairTy = Forall "a" $ Forall "b" $ TyVar "a" --> TyVar "b" --> TupleTy [TyVar "a", TyVar "b"]
 
   
 -- Test harness
