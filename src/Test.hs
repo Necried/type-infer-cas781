@@ -7,6 +7,7 @@ import Types
 import Check
 import Eval
 import Dot
+import BuildGraph
 
 import qualified Data.Map.Strict as M
 
@@ -21,6 +22,8 @@ import Control.Applicative
 infixr 1 -->
 (-->) :: Ty -> Ty -> Ty
 a --> b = TyArrow a b
+
+int = LiteralExpr . IntegerTerm
 
 tv = TyVar
 
@@ -87,9 +90,52 @@ cOrBody = Lam "p" $ Lam "q" $ Lam "t" $ Lam "f" $
 cAndTFeqTBody = Ann cAndBody cAndType `App` cTrueBody `App` cFalseBody
 
 -- Let test
-letBody = Let "x" (IntegerTerm 2) (BinOpExpr Plus (Var "x") (IntegerTerm 3))
+letBody = Let (VarPat "x") (LiteralExpr $ IntegerTerm 2) (BinOpExpr Plus (Var "x") (LiteralExpr $ IntegerTerm 3))
 letTy = IntegerTy
 
+-- Tuple test
+tupleBody = Tuple [LiteralExpr $ IntegerTerm 2, LiteralExpr (BooleanTerm True), Ann idBody idType]
+runTupleTest = runTyInfer [] tupleBody 
+
+-- Let with function binding test
+letFuncBody = Let (VarPat "f") (Lam "x" $ BinOpExpr Plus (Var "x") (int 4)) (Var "f")
+letFuncType = IntegerTy --> IntegerTy
+
+-- Recursion test
+factBody =
+  Let (VarPat "fact")
+   (Lam "x" $
+     (If (PredOpExpr Eq (Var "x") (int 0))
+         (int 1)
+         (BinOpExpr Mult (Var "x")
+                         (App (Var "fact")
+                              (BinOpExpr Minus (Var "x") (int 1))
+                         )
+         )
+     )
+    )
+  -- (Var "fact")
+  (App (Var "fact") (int 5))
+
+infLoopBody =
+  Let (VarPat "f") (flip Ann infLoopType $ Lam "x" $ App (Var "f") (Var "x"))
+  (Var "f")
+infLoopType = Forall "a" $ Forall "b" $ TyVar "a" --> TyVar "b"
+inconsistentBody = Let (VarPat "x") (App (Var "x") (int 3)) (Var "x")
+
+-- Tuple tests
+fstBody =
+  Lam "tup" $
+  Let (TuplePat [VarPat "x", VarPat "y"])
+      (Var "tup")
+      (Var "x")
+fstTy = Forall "a" $ Forall "b" $ TupleTy [TyVar "a", TyVar "b"] --> TyVar "a"
+
+mkPairBody =
+  Lam "a" $ Lam "b" $ Tuple [Var "a", Var "b"]
+mkPairTy = Forall "a" $ Forall "b" $ TyVar "a" --> TyVar "b" --> TupleTy [TyVar "a", TyVar "b"]
+
+  
 -- Test harness
 runPassingTests = do
   runTyCheck [] idBody idType
@@ -123,9 +169,9 @@ infixl 9 |@| -- 9 is the maximum precedence
 (|@|) :: Expr -> Expr -> Expr
 (|@|) = App
 
-appId = idBody |@| UnitTerm
-appFlipPartial = flipBody |@| constBody |@| UnitTerm
-appFlip = appFlipPartial |@| UnitTerm 
+appId = idBody |@| LiteralExpr UnitTerm
+appFlipPartial = flipBody |@| constBody |@| LiteralExpr UnitTerm
+appFlip = appFlipPartial |@| LiteralExpr UnitTerm 
 
 evalTests = mapM (print . eval M.empty)
   [ appId

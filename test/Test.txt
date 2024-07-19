@@ -50,3 +50,14 @@ g = f ()
 -- anonymous function application
 h :: ()
 h = (\a -> a) ()
+
+i = 2
+
+j = 2 + 2
+
+k = 2 + 2 * 3
+
+l = \x -> x + 2
+
+m :: Int -> Int -> Int
+m = \y -> \x -> if x + 2 < y then x * 2 else y

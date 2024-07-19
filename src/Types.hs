@@ -1,3 +1,5 @@
+{-# LANGUAGE TypeFamilies #-}
+
 module Types where
 
 import Utils
@@ -9,97 +11,83 @@ import qualified Data.Text as Text
 import qualified Data.Graph.Inductive.Graph as G
 import qualified Data.Graph.Inductive.PatriciaTree as PT
 
-type Result a = Either Text a
+type Result a = Either ErrMsg a
 
-type TyStateT a = StateT MetaData (Either Text) a
+type ErrMsg = (Ctx, Text)
+
+type TyStateT metadata a = StateT metadata (Either ErrMsg) a
 
 type RuleName = Text
 
 data JudgmentTrace =
-    AlgTypingTrace RuleName (Ctx, Expr, Ty)
-  | SubtypeTrace RuleName (Ctx, Ty, Ty)
-  | InstLTrace RuleName (Ctx, Ty, Ty)
-  | InstRTrace RuleName (Ctx, Ty, Ty)
+    TyCheckTrace (Ctx, Expr, Ty)
+  | TyInferTrace (Ctx, Expr)
+  | TyAppInferTrace (Ctx, Ty, Expr)
+  | SubtypeTrace (Ctx, Ty, Ty)
+  | InstLTrace (Ctx, Ty, Ty)
+  | InstRTrace (Ctx, Ty, Ty)
+  | EmptyTrace
   deriving Show
 
-type JudgmentGraph = PT.Gr JudgmentTrace FunctionCall
+type JudgmentGraph = PT.Gr JudgmentTrace JudgmentRule
 
-data FunctionCall =
-    TyCheck
-  | TyInfer
-  | TyAppInfer
-  -- TODO: Unimplemented in Check.hs
-  | InstL
-  | InstR
-  | SubtypeOf
+data JudgmentRule =
+    TyCheck RuleName
+  | TyInfer RuleName
+  | TyAppInfer RuleName
+  | InstL RuleName
+  | InstR RuleName
+  | SubtypeOf RuleName
   deriving (Show)
 
 data GBuilder = GBuilder
   { nodeCounter :: Int
   , nodes :: [G.LNode JudgmentTrace]
-  , edges :: [G.LEdge FunctionCall]
-  }
+  , edges :: [G.LEdge JudgmentRule]
+  , traceStack :: [G.LNode JudgmentTrace]
+  , nodeStack :: [Int]
+  } deriving Show
 
 data MetaData = MetaData
   { varCounter :: Int
-  , judgmentBuilder :: GBuilder
-  }
+  } deriving Show
+
+data MetaDataGBuilder = MetaDataGBuilder
+  { judgmentBuilder :: GBuilder
+  , metaData :: MetaData
+  } deriving Show
 
 initMetaData :: MetaData
-initMetaData = MetaData 0 initGBuilder
-  where
-    initGBuilder = GBuilder 0 [] []
+initMetaData = MetaData 0
 
-getNewVar :: Text -> TyStateT Text
-getNewVar varName = do
-  v <- gets varCounter
-  modify $ \s -> s { varCounter = v + 1 }
-  return $ Text.concat [varName, Text.pack $ show v]
+initMetaDataGBuilder :: MetaDataGBuilder
+initMetaDataGBuilder = MetaDataGBuilder initBuilder initMetaData
+  where initBuilder = GBuilder 0 [] [] [] []
 
--- NOTE: This assumes a call to `createJudgmentTrace` after the
--- child node is fully constructed!
-getNode :: TyStateT Int
-getNode = pred <$> gets (nodeCounter . judgmentBuilder)
-
--- `createJudgmentTrace src tgts` takes a src node,
--- and a list of (tgtNode, edge) pair, and connects
--- src --edge--> tgtNode
-createJudgmentTrace ::
-  JudgmentTrace ->
-  [(G.Node, FunctionCall)] ->
-  TyStateT ()
-createJudgmentTrace srcLabel [] = do
-  builder <- gets judgmentBuilder
-  let curNodes = nodes builder
-      srcNode = nodeCounter builder
-  modify $ \s -> s
-    { judgmentBuilder = builder
-      { nodes = (srcNode, srcLabel) : curNodes
-      , nodeCounter = srcNode + 1
-      }
-    }
-createJudgmentTrace srcLabel ((tgtNode, edgeLabel):rest) = do
-  builder <- gets judgmentBuilder
-  let curEdges = edges builder
-      srcNode = nodeCounter builder
-  modify $ \s -> s
-    { judgmentBuilder = builder
-      { edges = (srcNode, tgtNode, edgeLabel):curEdges }
-    }
-  createJudgmentTrace srcLabel rest
 
 data Expr =
     Var Text
-  | UnitTerm
-  | BooleanTerm Bool
-  | IntegerTerm Int
+  | LiteralExpr Literal
+  | Tuple [Expr]
   | BinOpExpr Op Expr Expr
   | PredOpExpr PredOp Expr Expr
   | If Expr {-condition-} Expr {-then-} Expr {-else-}
-  | Let Text Expr Expr -- let x = e in e'
+  | Let Pat Expr Expr -- let x = e in e'
   | Lam Text Expr
   | App Expr Expr
   | Ann Expr Ty
+  deriving (Eq, Show)
+
+data Literal =
+    UnitTerm
+  | BooleanTerm Bool
+  | IntegerTerm Int
+  deriving (Eq, Show)
+
+data Pat =
+    VarPat Text
+  | TuplePat [Pat]
+  | WildCardPat
   deriving (Eq, Show)
 
 data Op
@@ -128,6 +116,7 @@ data Ty =
     UnitTy
   | BooleanTy
   | IntegerTy
+  | TupleTy [Ty]
   | TyVar Text
   | TyVarHat Text
   | TyArrow Ty Ty
@@ -144,3 +133,14 @@ data CtxItem =
 
 type Ctx = [CtxItem]
 
+
+class TyJudge metadata where
+  completedRule :: JudgmentRule -> Ctx -> TyStateT metadata Ctx
+  completedRuleWithTyRet ::
+    JudgmentRule -> (Ty, Ctx) -> TyStateT metadata (Ty, Ctx)
+  getNewVar :: Text -> TyStateT metadata Text
+  subTypeOf :: Ctx -> Ty -> Ty -> TyStateT metadata Ctx
+  instL, instR :: Ctx -> Ty -> Ty -> TyStateT metadata Ctx
+  tyCheck :: Ctx -> Expr -> Ty -> TyStateT metadata Ctx
+  tyInfer :: Ctx -> Expr -> TyStateT metadata (Ty, Ctx)
+  tyAppInfer :: Ctx -> Ty -> Expr -> TyStateT metadata (Ty, Ctx)

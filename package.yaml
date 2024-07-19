@@ -32,6 +32,8 @@ dependencies:
 - text
 - fgl
 - prettyprinter
+- pretty-simple
+- haskeline
 
 ghc-options:
 - -Wall
@@ -48,7 +50,7 @@ library:
   source-dirs: src
 
 executables:
-  type-infer-cas781-exe:
+  repl:
     main:                Main.hs
     source-dirs:         app
     ghc-options:

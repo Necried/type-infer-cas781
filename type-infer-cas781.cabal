@@ -25,6 +25,7 @@ source-repository head
 
 library
   exposed-modules:
+      BuildGraph
       Check
       Dot
       Eval
@@ -33,6 +34,7 @@ library
       Parser
       Parser.Prelude
       Pretty
+      Repl
       Test
       Types
       Utils
@@ -51,14 +53,16 @@ library
     , containers
     , extra
     , fgl
+    , haskeline
     , mtl
     , parsec
+    , pretty-simple
     , prettyprinter
     , text
     , transformers
   default-language: Haskell2010
 
-executable type-infer-cas781-exe
+executable repl
   main-is: Main.hs
   other-modules:
       Paths_type_infer_cas781
@@ -74,8 +78,10 @@ executable type-infer-cas781-exe
     , containers
     , extra
     , fgl
+    , haskeline
     , mtl
     , parsec
+    , pretty-simple
     , prettyprinter
     , text
     , transformers
@@ -99,8 +105,10 @@ test-suite type-infer-cas781-test
     , containers
     , extra
     , fgl
+    , haskeline
     , mtl
     , parsec
+    , pretty-simple
     , prettyprinter
     , text
     , transformers

@@ -2,6 +2,8 @@
 
 module Pretty where
 
+import Prelude hiding(LT,LTE,GT,GTE)
+
 import Data.List
 import Data.Text (Text)
 import Data.Text.Prettyprint.Doc
@@ -22,12 +24,14 @@ instance Pretty DeclMap where
 
 instance Pretty Expr where
     pretty (Var v) = pretty v
-    pretty UnitTerm = "()"
-    pretty (BooleanTerm b) = pretty b
-    pretty (IntegerTerm i) = pretty i
+    pretty (LiteralExpr l) = pretty l
+    -- TODO: Should use something more flexible than hsep here
+    pretty (Tuple exprs) = parens $ hsep $ punctuate comma $ map pretty exprs
     pretty (If p e1 e2) = "if" <+> pretty p <+> "then" <+> pretty e1 <+> pretty e2
     pretty (BinOpExpr binOp e1 e2) =
       pretty e1 <+> pretty binOp <+> pretty e2
+    pretty (PredOpExpr predOp e1 e2) =
+      pretty e1 <+> pretty predOp <+> pretty e2
     pretty (Let x e1 e2) =
       align $ vsep
         [ "let"
@@ -39,16 +43,35 @@ instance Pretty Expr where
     pretty (App e0 e1) = parens (pretty e0) <+> parens (pretty e1)
     pretty (Ann e t) = pretty e <+> "::" <+> pretty t
 
+instance Pretty Literal where
+    pretty UnitTerm = "()"
+    pretty (BooleanTerm b) = pretty b
+    pretty (IntegerTerm i) = pretty i
+instance Pretty Pat where
+    pretty (VarPat p) = pretty p
+    pretty (TuplePat pats) = pretty pats
+    pretty WildCardPat = "_"
+    
 instance Pretty Op where
   pretty Plus = "+"
   pretty Minus = "-"
   pretty Mult = "*"
   pretty Divide = "/"
 
+instance Pretty PredOp where
+  pretty LT = "<"
+  pretty LTE = "<="
+  pretty GT = ">"
+  pretty GTE = ">="
+  pretty Eq = "=="
+  pretty And = "&&"
+  pretty Or = "||"
+
 instance Pretty Ty where
     pretty UnitTy = "()"
     pretty BooleanTy = "Bool"
     pretty IntegerTy = "Int"
+    pretty (TupleTy tys) = parens $ hsep $ punctuate comma $ map pretty tys
     pretty (TyVar v) = pretty v
     pretty (TyVarHat v) = pretty v <> "Hat"
     pretty (TyArrow t0 t1) = pretty t0 <+> "->" <+> pretty t1
@@ -62,21 +85,31 @@ instance Pretty CtxItem where
     pretty (CtxMarker marker) = pretty marker <> "Mark"
 
 instance Pretty JudgmentTrace where
-    pretty (AlgTypingTrace rule (ctx, expr, ty)) =
-      "Alg" <+> pretty rule <> hardline <> vcat
+    pretty (TyCheckTrace (ctx, expr, ty)) =
+      "TyCheck" <+> hardline <> vcat
         [ "Ctx:" <+> pretty ctx
         , "Expr:" <+> pretty expr
         , "Ty:" <+> pretty ty]
-    pretty (SubtypeTrace rule (ctx, t1, t2)) =
-      "Sub" <+> prettyTraceTemplate rule ctx t1 t2
-    pretty (InstLTrace rule (ctx, t1, t2)) =
-      "InstL" <+> prettyTraceTemplate rule ctx t1 t2
-    pretty (InstRTrace rule (ctx, t1, t2)) =
-      "InstR" <+> prettyTraceTemplate rule ctx t1 t2
+    pretty (TyInferTrace (ctx, expr)) =
+      "TyInfer" <+> hardline <> vcat
+        [ "Ctx:" <+> pretty ctx
+        , "Expr:" <+> pretty expr ]
+    pretty (TyAppInferTrace (ctx, ty, expr)) =
+      "TyAppInfer" <+> hardline <> vcat
+        [ "Ctx:" <+> pretty ctx
+        , "Expr:" <+> pretty expr
+        , "Ty:" <+> pretty ty]
+    pretty (SubtypeTrace (ctx, t1, t2)) =
+      "Sub" <+> prettyTraceTemplate ctx t1 t2
+    pretty (InstLTrace (ctx, t1, t2)) =
+      "InstL" <+> prettyTraceTemplate ctx t1 t2
+    pretty (InstRTrace (ctx, t1, t2)) =
+      "InstR" <+> prettyTraceTemplate ctx t1 t2
+    pretty EmptyTrace = ""
 
-prettyTraceTemplate :: Text -> Ctx -> Ty -> Ty -> Doc ann
-prettyTraceTemplate rule ctx t1 t2 =
-    pretty rule <> hardline <> vcat
+prettyTraceTemplate :: Ctx -> Ty -> Ty -> Doc ann
+prettyTraceTemplate ctx t1 t2 =
+    hardline <> vcat
       [ "Ctx:" <+> pretty ctx
       , "t1:" <+> pretty t1
       , "t2:" <+> pretty t2]
