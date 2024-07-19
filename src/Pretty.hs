@@ -25,6 +25,8 @@ instance Pretty DeclMap where
 instance Pretty Expr where
     pretty (Var v) = pretty v
     pretty (LiteralExpr l) = pretty l
+    -- TODO: Should use something more flexible than hsep here
+    pretty (Tuple exprs) = parens $ hsep $ punctuate comma $ map pretty exprs
     pretty (If p e1 e2) = "if" <+> pretty p <+> "then" <+> pretty e1 <+> pretty e2
     pretty (BinOpExpr binOp e1 e2) =
       pretty e1 <+> pretty binOp <+> pretty e2
@@ -45,7 +47,6 @@ instance Pretty Literal where
     pretty UnitTerm = "()"
     pretty (BooleanTerm b) = pretty b
     pretty (IntegerTerm i) = pretty i
-
 instance Pretty Pat where
     pretty (VarPat p) = pretty p
     pretty (TuplePat pats) = pretty pats
@@ -70,6 +71,7 @@ instance Pretty Ty where
     pretty UnitTy = "()"
     pretty BooleanTy = "Bool"
     pretty IntegerTy = "Int"
+    pretty (TupleTy tys) = parens $ hsep $ punctuate comma $ map pretty tys
     pretty (TyVar v) = pretty v
     pretty (TyVarHat v) = pretty v <> "Hat"
     pretty (TyArrow t0 t1) = pretty t0 <+> "->" <+> pretty t1

@@ -40,7 +40,10 @@ instance TyJudge MetaDataGBuilder where
     | getRule r `elem` ["Var", "1I=>", "BoolI=>", "IntI=>"] = mkGraphNode r 0 retCtx
     | getRule r `elem` ["Anno", "->I=>", "Forall-App", "->App", "alphaHatApp"] =
         mkGraphNode r 1 retCtx
-    | getRule r `elem` ["BinOpExpr=>", "Let=>", "PredOp=>", "->E"] = mkGraphNode r 2 retCtx
+    | getRule r `elem` ["BinOpExpr=>",
+                        "Let=>", "Let=>TupleTy", "Let=>ForallTupleTy", "Let=>TyVarHatTupleTy",
+                        "PredOp=>", "->E"]
+        = mkGraphNode r 2 retCtx
 
   getNewVar varName = do
     v <- gets (varCounter . metaData)

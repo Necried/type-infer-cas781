@@ -157,7 +157,12 @@ subTypeOf' ctx tyA aHat@(TyVarHat alphaName) = do
   ctxDelta <- instR ctx tyA (TyVarHat alphaName)
   completedRule (SubtypeOf "<:InstantiateR") ctxDelta
 
-subTypeOf' ctx tyA tyB = error $ "No subtype instance of " ++ show tyA ++ " " ++ show tyB ++ " with context " ++ show ctx
+subTypeOf' ctx tyA tyB = -- error $ "No subtype instance of " ++ show tyA ++ " " ++ show tyB ++ " with context " ++ show ctx
+  throwErrorWithContext ctx $
+    Text.concat [ "No subtype instance of "
+                , Text.pack $ show tyA
+                , " <: "
+                , Text.pack $ show tyB]
 
 instL' :: TyJudge metadata => Ctx -> Ty -> Ty -> TyStateT metadata Ctx
 instL' ctx tvHat@(TyVarHat alphaName) tau = do
@@ -403,7 +408,7 @@ tyInfer' ctx (Let (TuplePat pats) e1 e2) = do
       (tyC, ctxDelta) <- tyInfer ctxExtended e2
       -- We need to substitute over the polymorphic return variable here
       let tyCSpecialize = ctxSubst ctxDelta tyC
-      completedRuleWithTyRet (TyInfer "Let=>") (tyCSpecialize, ctxDelta)
+      completedRuleWithTyRet (TyInfer "Let=>TupleTy") (tyCSpecialize, ctxDelta)
     ty@(Forall _ _) -> do
       let
         tyExprs = unwrapForalls ty Set.empty
@@ -412,7 +417,7 @@ tyInfer' ctx (Let (TuplePat pats) e1 e2) = do
       (tyC, ctxDelta) <- tyInfer ctxExtended e2
       -- We need to substitute over the polymorphic return variable here
       let tyCSpecialize = ctxSubst ctxDelta tyC
-      completedRuleWithTyRet (TyInfer "Let=>") (tyCSpecialize, ctxDelta)
+      completedRuleWithTyRet (TyInfer "Let=>ForallTupleTy") (tyCSpecialize, ctxDelta)
     TyVarHat alphaHat -> do
       varHats <- replicateM (length pats) (getNewVar "alphaTuple") 
       let
@@ -421,7 +426,7 @@ tyInfer' ctx (Let (TuplePat pats) e1 e2) = do
       (tyC, ctxDelta) <- tyInfer ctxExtended e2
       -- We need to substitute over the polymorphic return variable here
       let tyCSpecialize = ctxSubst ctxDelta tyC
-      completedRuleWithTyRet (TyInfer "Let=>") (tyCSpecialize, ctxDelta)
+      completedRuleWithTyRet (TyInfer "Let=>TyVarHatTupleTy") (tyCSpecialize, ctxDelta)
     _ -> throwErrorWithContext ctx "let-binding tuple is not a tuple type"
   where
     assocPat :: Pat -> Ty -> [CtxItem]
