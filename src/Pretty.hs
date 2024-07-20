@@ -14,7 +14,7 @@ import Types
 import Parser.Prelude
 
 instance Pretty DeclMap where
-    pretty declMap = vsep $ map prettyOne $ toList declMap
+    pretty (DeclMap declMap) = vsep $ map prettyOne declMap
         where
             prettyOne (name, (e, Just t)) = 
                 pretty name <+> "::" <+> pretty t <> hardline <>

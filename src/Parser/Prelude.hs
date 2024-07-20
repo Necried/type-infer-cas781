@@ -13,7 +13,8 @@ data ParserState =
     ParserState { run :: DeclMap }
     deriving (Eq, Show)
 
-type DeclMap = Map Name (Expr, Maybe Ty)
+data DeclMap = DeclMap [(Name,(Expr, Maybe Ty))]
+    deriving (Eq, Show)
 
 type Parser a = Parsec [Token] ParserState a
 

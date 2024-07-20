@@ -27,7 +27,7 @@ declarations :: Parser DeclMap
 declarations = do
     many $ do 
         (n, e, mT) <- declaration
-        modifyState (\(ParserState map) -> ParserState $ Map.insert n (e, mT) map)
+        modifyState (\(ParserState (DeclMap map)) -> ParserState $ DeclMap $ map ++ [(n,(e,mT))]) --Map.insert n (e, mT) map)
     run <$> getState
 
 exprOrDecl :: Parser (Either Expr (Name, Expr, Maybe Ty))
@@ -291,7 +291,7 @@ tyForall = do
 
 runCustomParse :: Pretty a => Parsec [Token] ParserState a -> [Token] -> Either ParseError a
 runCustomParse parser tokens =
-    runParser parser (ParserState Map.empty) "" tokens
+    runParser parser (ParserState $ DeclMap []) "" tokens
 
 runParse :: [Token] -> Either ParseError DeclMap
 runParse =
@@ -315,11 +315,11 @@ runLexParse text = do
 
 runExprParse :: [Token] -> Either ParseError Expr
 runExprParse tokens =
-    runParser expr (ParserState Map.empty) "" tokens
+    runParser expr (ParserState $ DeclMap []) "" tokens
 
 runExprOrDeclParse :: [Token] -> Either ParseError (Either Expr (Name, Expr, Maybe Ty))
 runExprOrDeclParse tokens =
-    runParser exprOrDecl (ParserState Map.empty) "" tokens
+    runParser exprOrDecl (ParserState $ DeclMap []) "" tokens
 
 runExprTest :: Text -> IO ()
 runExprTest text = do
