@@ -24,6 +24,10 @@ find' ((k, v) : rest) lookupKey =
 takeUntilVar :: Eq a => a -> [a] -> [a]
 takeUntilVar x = takeWhile (/= x)
 
+-- Precondition: x exists in the input list
+takeAfterVar :: Eq a => a -> [a] -> [a]
+takeAfterVar x = tail . dropWhile (/= x)
+
 splitOnItem :: Eq a => a -> [a] -> ([a],[a])
 splitOnItem x xs =
   (takeWhile (/= x) xs, drop 1 $ dropWhile (/= x) xs)

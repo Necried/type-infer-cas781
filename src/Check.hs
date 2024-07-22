@@ -148,7 +148,7 @@ subTypeOf' ctx aHat@(TyVarHat alphaName) tyA = do
   completedRule (SubtypeOf "<:InstantiateL") ctxDelta
   where
     filterItemHats (CtxItemHat _) = True
-    filterItemHate _ = False
+    filterItemHats _ = False
 subTypeOf' ctx tyA aHat@(TyVarHat alphaName) = do
   when (Set.member (TyVarHat alphaName) $ freeVars tyA) $
     throwErrorWithContext ctx $ Text.concat ["Type variable ", alphaName, "Hat exists as a free variable in the given type."]
@@ -349,25 +349,19 @@ tyInfer' ctx (Let (VarPat x) e1@(Lam arg body) e2) = do
   completedRuleWithTyRet (TyInfer "Let=>") (tyC, ctxDelta)
 -}
 tyInfer' ctx (Let (VarPat x) e1 e2) = do
-  -- tyCheck ctx (App (Lam x e2) e1) tyC
-  -- (tyA, ctxOmega) <- tyInfer ctx (Lam x e2)
-  -- (tyC, ctxDelta) <- tyAppInfer' ctxOmega (ctxSubst ctxOmega tyA) e1
   alphaHat <- getNewVar "alpha"
-  -- betaHat <- getNewVar "beta"
   let
     alphaHatItem = CtxItemHat alphaHat
     alphaHatTyVar = TyVarHat alphaHat
-    -- betaHatItem = CtxItemHat betaHat
-    -- betaHatTyVar = TyVarHat betaHat
-    xTyMapping = CtxMapping x alphaHatTyVar -- (TyArrow alphaHatTyVar betaHatTyVar)
-    ctxWithXMapping = ctx <: alphaHatItem <: {- betaHatItem <: -} xTyMapping
+    xTyMapping = CtxMapping x alphaHatTyVar
+    ctxWithXMapping = ctx <: CtxMarker alphaHat <: alphaHatItem <: xTyMapping
   (tyA, ctxOmega) <- tyInfer ctxWithXMapping e1
-  -- let subTypeOfCtx = subTypeOf ctxOmega
-  -- ctxOmega' <- ctxSubst ctxOmega tyA `subTypeOfCtx` ctxSubst ctxOmega alphaHatTyVar
+  pTraceShowM (tyA, ctxOmega)
   let
-    tyASpecialize = ctxSubst ctxOmega tyA
+    ctxAfterMarker = takeAfterVar (CtxMarker alphaHat) ctxOmega
+    tyASpecialize = ctxSubst ctxAfterMarker tyA
     e1TyMapping = CtxMapping x tyASpecialize
-    ctxExtended = ctxOmega <: e1TyMapping
+    ctxExtended = ctx <: e1TyMapping
   pTraceShowM tyASpecialize
   when (notSpecialized tyASpecialize) $ throwErrorWithContext ctxExtended $ Text.concat
     [ "let-binding for expression "
@@ -375,9 +369,9 @@ tyInfer' ctx (Let (VarPat x) e1 e2) = do
     , " did not specialize, and has type "
     , Text.pack $ show tyA
     ]
-  let ctxOmega' = removeOldOccurence xTyMapping ctxExtended
-  pTraceShowM (tyA, tyASpecialize, ctxOmega', ctxExtended)
-  (tyC, ctxDelta) <- tyInfer ctxOmega' e2
+  -- let ctxOmega' = removeOldOccurence xTyMapping ctxExtended
+  -- pTraceShowM (tyA, tyASpecialize, ctxOmega', ctxExtended)
+  (tyC, ctxDelta) <- tyInfer ctxExtended e2
   -- We need to substitute over the polymorphic return variable here
   completedRuleWithTyRet (TyInfer "Let=>") (tyC, ctxDelta)
   where
@@ -409,6 +403,7 @@ tyInfer' ctx (Let (TuplePat pats) e1 e2) = do
       -- We need to substitute over the polymorphic return variable here
       let tyCSpecialize = ctxSubst ctxDelta tyC
       completedRuleWithTyRet (TyInfer "Let=>TupleTy") (tyCSpecialize, ctxDelta)
+  {-
     ty@(Forall _ _) -> do
       let
         tyExprs = unwrapForalls ty Set.empty
@@ -427,6 +422,7 @@ tyInfer' ctx (Let (TuplePat pats) e1 e2) = do
       -- We need to substitute over the polymorphic return variable here
       let tyCSpecialize = ctxSubst ctxDelta tyC
       completedRuleWithTyRet (TyInfer "Let=>TyVarHatTupleTy") (tyCSpecialize, ctxDelta)
+  -}
     _ -> throwErrorWithContext ctx "let-binding tuple is not a tuple type"
   where
     assocPat :: Pat -> Ty -> [CtxItem]
