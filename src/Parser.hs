@@ -96,7 +96,7 @@ table   =
         [ --[prefix MinusA negate, prefix "+" id ]
           [binary TimesA (BinOpExpr Mult) AssocLeft, binary DivideA (BinOpExpr Divide) AssocLeft ]
         , [binary PlusA (BinOpExpr Plus) AssocLeft, binary MinusA (BinOpExpr Minus) AssocLeft ]
-        , [binary LTA (PredOpExpr LT) AssocLeft, binary LTEA (PredOpExpr LTE) AssocLeft]
+        , [binary LTA (PredOpExpr LT) AssocLeft, binary LTEA (PredOpExpr LTE) AssocLeft, binary GTA (PredOpExpr GT) AssocLeft, binary GTEA (PredOpExpr GTE) AssocLeft]
         , [binary EqRA (PredOpExpr Eq) AssocLeft]
         , [binary AndA (PredOpExpr And) AssocLeft]
         , [binary OrA (PredOpExpr Or) AssocLeft]
