@@ -60,4 +60,22 @@ k = 2 + 2 * 3
 l = \x -> x + 2
 
 m :: Int -> Int -> Int
+
 m = \y -> \x -> if x + 2 < y then x * 2 else y
+
+n :: forall a . forall b . (a, b) -> a
+n = \tup -> 
+    let 
+      (x,_) = tup
+    in
+      x
+
+o :: (Int, Int)
+o = (1,2)
+
+p :: forall a b . (a, (b, c)) -> (a,c)
+p = \tup -> 
+    let 
+      (x,(_,y)) = tup
+    in
+      (x, y)
