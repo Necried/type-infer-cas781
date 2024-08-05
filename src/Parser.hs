@@ -27,7 +27,7 @@ declarations :: Parser DeclMap
 declarations = do
     many $ do 
         (n, e, mT) <- declaration
-        modifyState (\(ParserState map) -> ParserState $ Map.insert n (e, mT) map)
+        modifyState (\(ParserState (DeclMap map)) -> ParserState $ DeclMap $ map ++ [(n,(e,mT))]) --Map.insert n (e, mT) map)
     run <$> getState
 
 exprOrDecl :: Parser (Either Expr (Name, Expr, Maybe Ty))
@@ -73,7 +73,8 @@ expr = do
 term = do
     t <- choice 
         [
-            paren expr
+            try $ paren expr
+        ,   try $ tuple
         ,   try number
         ,   try boolean
         ,   if'
@@ -95,7 +96,7 @@ table   =
         [ --[prefix MinusA negate, prefix "+" id ]
           [binary TimesA (BinOpExpr Mult) AssocLeft, binary DivideA (BinOpExpr Divide) AssocLeft ]
         , [binary PlusA (BinOpExpr Plus) AssocLeft, binary MinusA (BinOpExpr Minus) AssocLeft ]
-        , [binary LTA (PredOpExpr LT) AssocLeft, binary LTEA (PredOpExpr LTE) AssocLeft]
+        , [binary LTA (PredOpExpr LT) AssocLeft, binary LTEA (PredOpExpr LTE) AssocLeft, binary GTA (PredOpExpr GT) AssocLeft, binary GTEA (PredOpExpr GTE) AssocLeft]
         , [binary EqRA (PredOpExpr Eq) AssocLeft]
         , [binary AndA (PredOpExpr And) AssocLeft]
         , [binary OrA (PredOpExpr Or) AssocLeft]
@@ -109,7 +110,7 @@ number :: Parser Expr
 number = do
     (nextToken, _) <- anyToken 
     case nextToken of
-        IntegerA n -> pure $ IntegerTerm n
+        IntegerA n -> pure $ LiteralExpr $ IntegerTerm n
         DoubleA d -> undefined
         _ -> fail "Expected a number"
 
@@ -117,7 +118,7 @@ boolean :: Parser Expr
 boolean = do
     (nextToken, _) <- anyToken 
     case nextToken of
-        BooleanA b -> pure $ BooleanTerm b
+        BooleanA b -> pure $ LiteralExpr $ BooleanTerm b
         _ -> fail "Expected True or False"
 
 paren p = do
@@ -152,12 +153,27 @@ if' = do
 let' :: Parser Expr
 let' = do
     myToken LetA
-    v <- var
+    v <- pat
     myToken EqA
     e <- expr
     myToken InA
     e' <- expr
     pure $ Let v e e'
+
+pat :: Parser Pat
+pat = choice
+    [
+        VarPat <$> var 
+    ,   tuplePat
+    ,   myToken UnderscoreA >> pure WildCardPat
+    ]
+
+tuplePat :: Parser Pat
+tuplePat = do
+    myToken LParenA
+    pats <- sepBy1 pat (myToken CommaA)
+    myToken RParenA
+    pure $ TuplePat pats
 
 lambda :: Parser Expr
 lambda = do
@@ -166,6 +182,13 @@ lambda = do
     myToken ArrowA
     e <- expr
     pure $ Lam v e
+
+tuple :: Parser Expr
+tuple = do
+    myToken LParenA
+    exprs <- expr `sepBy1` (myToken CommaA)
+    myToken RParenA
+    pure $ Tuple exprs
 
 ann :: Parser Expr
 ann = do
@@ -184,7 +207,7 @@ var = try $ do
 unit :: Parser Expr
 unit = do
     myToken UnitA
-    pure UnitTerm
+    pure $ LiteralExpr UnitTerm
 
 tyInteger :: Parser Ty
 tyInteger = do
@@ -209,15 +232,16 @@ type' = do
     t <- choice
         [
             unitTy
-        ,   tyVar
         ,   tyForall
-        ,   tyInteger
-        ,   tyBoolean
-        ,   do
+        ,   try $ tyInteger
+        ,   try $ tyBoolean
+        ,   tyVar
+        ,   try $ do
                 myToken LParenA
                 t <- type'
                 myToken RParenA
                 pure t
+        ,   try $ tyTuple
         ]
 
     mT' <- optionMaybe $ do
@@ -243,6 +267,13 @@ tyVar = do
     v <- var
     pure $ TyVar v
 
+tyTuple :: Parser Ty
+tyTuple = do
+    myToken LParenA
+    tys <- sepBy1 type' (myToken CommaA)
+    myToken RParenA
+    pure $ TupleTy tys
+
 tyArrow :: Parser Ty
 tyArrow = do
     ty0 <- type'
@@ -253,14 +284,18 @@ tyArrow = do
 tyForall :: Parser Ty
 tyForall = do
     myToken ForallA
-    v <- var
+    vs <- many1 var
     myToken PeriodA
     t <- type'
-    pure $ Forall v t
+    pure $ foldr Forall t vs
+
+runCustomParse :: Pretty a => Parsec [Token] ParserState a -> [Token] -> Either ParseError a
+runCustomParse parser tokens =
+    runParser parser (ParserState $ DeclMap []) "" tokens
 
 runParse :: [Token] -> Either ParseError DeclMap
-runParse tokens =
-    runParser declarations (ParserState Map.empty) "" tokens
+runParse =
+    runCustomParse declarations
 
 runLexParseExpr :: Text -> Either ParseError Expr
 runLexParseExpr text = do 
@@ -280,11 +315,11 @@ runLexParse text = do
 
 runExprParse :: [Token] -> Either ParseError Expr
 runExprParse tokens =
-    runParser expr (ParserState Map.empty) "" tokens
+    runParser expr (ParserState $ DeclMap []) "" tokens
 
 runExprOrDeclParse :: [Token] -> Either ParseError (Either Expr (Name, Expr, Maybe Ty))
 runExprOrDeclParse tokens =
-    runParser exprOrDecl (ParserState Map.empty) "" tokens
+    runParser exprOrDecl (ParserState $ DeclMap []) "" tokens
 
 runExprTest :: Text -> IO ()
 runExprTest text = do
@@ -311,6 +346,22 @@ runTest text = do
             putStrLn "==== Lexing Results ===="
             print tokens
             let parseResult = runParse tokens
+            putStrLn "\n==== Parsing Results ===="
+            case parseResult of
+                Left err -> print err
+                Right val -> do
+                    print $ pretty val
+    pure ()
+
+runCustomTest :: Pretty a => Parser a -> Text -> IO ()
+runCustomTest parser text = do
+    let lexResult = runLex text
+    case lexResult of
+        Left err -> print err
+        Right tokens -> do
+            putStrLn "==== Lexing Results ===="
+            print tokens
+            let parseResult = runCustomParse parser tokens
             putStrLn "\n==== Parsing Results ===="
             case parseResult of
                 Left err -> print err

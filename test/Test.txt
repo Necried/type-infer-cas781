@@ -73,9 +73,9 @@ n = \tup ->
 o :: (Int, Int)
 o = (1,2)
 
-p :: forall a b . (a, (b, c)) -> (a,c)
+p :: forall a . forall b . (a, b) -> a
 p = \tup -> 
     let 
-      (x,(_,y)) = tup
+      (x,_) = tup
     in
-      (x, y)
+      x
