@@ -14,7 +14,6 @@ import Data.Set (Set)
 import Data.Text (Text)
 import Data.List (find)
 import qualified Data.Text as Text
-
 import Debug.Pretty.Simple (pTraceShowM)
 
 import Types
@@ -356,13 +355,13 @@ tyInfer' ctx (Let (VarPat x) e1 e2) = do
     xTyMapping = CtxMapping x alphaHatTyVar
     ctxWithXMapping = ctx <: CtxMarker alphaHat <: alphaHatItem <: xTyMapping
   (tyA, ctxOmega) <- tyInfer ctxWithXMapping e1
-  pTraceShowM (tyA, ctxOmega)
+  -- pTraceShowM (tyA, ctxOmega)
   let
     ctxAfterMarker = takeAfterVar (CtxMarker alphaHat) ctxOmega
     tyASpecialize = ctxSubst ctxAfterMarker tyA
     e1TyMapping = CtxMapping x tyASpecialize
     ctxExtended = ctx <: e1TyMapping
-  pTraceShowM tyASpecialize
+  -- pTraceShowM tyASpecialize
   when (notSpecialized tyASpecialize) $ throwErrorWithContext ctxExtended $ Text.concat
     [ "let-binding for expression "
     , Text.pack $ show e1

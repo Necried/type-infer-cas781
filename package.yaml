@@ -34,6 +34,10 @@ dependencies:
 - prettyprinter
 - pretty-simple
 - haskeline
+- hspec
+- tasty
+- string-qq
+- tasty-hunit 
 
 ghc-options:
 - -Wall
@@ -68,5 +72,6 @@ tests:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
+    - -main-is Spec
     dependencies:
     - type-infer-cas781
