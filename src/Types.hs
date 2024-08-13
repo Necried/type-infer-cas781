@@ -64,6 +64,18 @@ initMetaDataGBuilder :: MetaDataGBuilder
 initMetaDataGBuilder = MetaDataGBuilder initBuilder initMetaData
   where initBuilder = GBuilder 0 [] [] [] []
 
+type Label = Text
+
+newtype RowVar = RowVar Text
+  deriving (Show, Ord, Eq)
+
+data Row =
+    OpenRow RowVar
+  | ClosedRow { labels :: [Label], types :: [Ty] }
+  deriving (Show, Ord, Eq)
+
+data Direction = L | R
+  deriving (Show, Ord, Eq)
 
 data Expr =
     Var Text
@@ -76,6 +88,12 @@ data Expr =
   | Lam Text Expr
   | App Expr Expr
   | Ann Expr Ty
+  | LabelExpr Text Expr
+  | UnlabelExpr Expr Text
+  | Project Direction Expr
+  | Concat Expr Expr
+  | Inject Direction Expr
+  | Branch Expr Expr
   deriving (Eq, Show)
 
 data Literal =
@@ -112,6 +130,11 @@ type Name = Text
 data Decl =
   Decl Name Expr (Maybe Ty)
 
+data Predicate =
+    Containment Direction Row Row
+  | Combination Row Row Row
+  deriving (Show, Ord, Eq)
+
 data Ty =
     UnitTy
   | BooleanTy
@@ -121,13 +144,20 @@ data Ty =
   | TyVarHat Text
   | TyArrow Ty Ty
   | Forall Text Ty
+  | ForallRow Text Ty
+  | Constraint Predicate Ty
+  | Product Row
+  | Sum Row
+  | LabelTy { label :: Label, labelTy :: Ty }
   deriving (Eq, Ord, Show)
 
 data CtxItem =
     CtxItem Text
   | CtxMapping { termVar :: Text, tyItem :: Ty }
   | CtxItemHat Text
+  | CtxOpenRowItem Text
   | CtxEquality { tyVarHat :: Text, tyEqTo :: Ty }
+  | CtxPredEvidence Predicate
   | CtxMarker Text
   deriving (Eq, Show)
 

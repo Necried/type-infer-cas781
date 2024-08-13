@@ -264,7 +264,12 @@ tyCheck' ctx e (Forall alpha tyA) = do
   ctxDeltaAlphaOmega <- tyCheck (ctx <: CtxItem alpha) e tyA
   let ctxDelta = takeUntilVar (CtxItem alpha) ctxDeltaAlphaOmega
   completedRule (TyCheck "Forall-I") ctxDelta
-  
+
+tyCheck' ctx expr@(UnlabelExpr labVal labelName) ty = do
+  -- alphaHat <- getNewVar "alpha"
+  ctxDelta <- tyCheck ctx labVal (LabelTy labelName ty)
+  completedRule (TyCheck "Label-E") ctxDelta
+
 tyCheck' ctx e tyB = do
   (tyA, ctxTheta) <- tyInfer ctx e
 
@@ -458,6 +463,31 @@ tyInfer' ctx (App e1 e2) = do
   (tyA, ctxOmega) <- tyInfer ctx e1
   (tyC, ctxDelta) <- tyAppInfer ctxOmega (ctxSubst ctxOmega tyA) e2
   completedRuleWithTyRet (TyInfer "->E") (tyC, ctxDelta)
+
+tyInfer' ctx (LabelExpr labelName labelVal) = do
+  (tyLabel, ctxDelta) <- tyInfer ctx labelVal
+  completedRuleWithTyRet (TyInfer "L-I") (LabelTy labelName tyLabel, ctxDelta)
+
+tyInfer' ctx (Concat leftExpr rightExpr) = do
+  leftVar <- getNewVar "left"
+  rightVar <- getNewVar "right"
+  goalVar <- getNewVar "goal"
+  let
+    rowList@[leftRow, rightRow, goalRow] =
+      map (OpenRow . RowVar) [leftVar, rightVar, goalVar]
+    [leftRowTy, rightRowTy, goalTy] =
+      map Product rowList
+    combPred = Combination leftRow rightRow goalRow
+    predEvidence = CtxPredEvidence combPred
+    ctxExtended =
+      ctx <: CtxOpenRowItem leftVar
+          <: CtxOpenRowItem rightVar
+          <: CtxOpenRowItem goalVar
+          <: predEvidence
+  ctxAfterLeft <- tyCheck ctxExtended leftExpr leftRowTy
+  ctxDeltaPredOmega <- tyCheck ctx rightExpr rightRowTy
+  let ctxDelta = takeUntilVar predEvidence ctxDeltaPredOmega
+  completedRuleWithTyRet (TyInfer "Concat") (goalTy, ctxDelta)
 
 tyAppInfer' :: TyJudge metadata => Ctx -> Ty -> Expr -> TyStateT metadata (Ty, Ctx)
 tyAppInfer' ctx (Forall alphaName tyA) e = do
